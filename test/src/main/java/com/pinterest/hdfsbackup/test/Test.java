@@ -42,5 +42,6 @@ public class Test {
     boolean ret = s3Downloader.DownloadFile(bucket, key, destDirName + "/" + key,
                                             doChecksum);
     log.info("download to " + destDirName + ", res = " + String.valueOf(ret));
+    s3Downloader.close();
   }
 }
