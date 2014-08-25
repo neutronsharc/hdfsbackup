@@ -62,7 +62,7 @@ public class Utils
 
       public Thread newThread(Runnable r) {
         Thread thread = new Thread(r);
-        thread.setName("hbasebackup-utils-" + this.threadCount++);
+        thread.setName("hbasebackup-poolexec-thread-" + this.threadCount++);
         return thread;
       }
     };
