@@ -27,10 +27,11 @@ public class S3CopyReducer implements Reducer<Text, FilePairInfo, Text, FilePair
   public int numberWorkerThreads;
   public long multipartChunkSize;
   public boolean userMultipart;
+  public boolean checksum;
 
   @Override
   public void close() throws IOException {
-    log.info("has posted " + count + " file pairs");
+    log.info("has posted " + count + " file pairs, wait for completion...");
     this.executor.close();
     log.info("has finished downloading " + count + " file pairs");
   }
@@ -38,11 +39,13 @@ public class S3CopyReducer implements Reducer<Text, FilePairInfo, Text, FilePair
   @Override
   public void configure(JobConf conf) {
     this.conf = conf;
-    this.fileQueueSize = conf.getInt("s3copy.queuesize", 1000);
-    this.numberWorkerThreads = conf.getInt("s3copy.numberthreads", 10);
+    // Each reducer has a queue to store file pairs to process.
+    this.fileQueueSize = conf.getInt("s3copy.queuesize", 100);
+    // Each reducer spawns this many worker threads.
+    this.numberWorkerThreads = conf.getInt("s3copy.workerthreads", 10);
     this.userMultipart = conf.getBoolean("s3copy.multipart", true);
     this.multipartChunkSize = conf.getInt("s3copy.chunksizemb", 32) * (1024L * 1024);
-
+    this.checksum = conf.getBoolean("s3copy.checksum", true);
     this.executor = new SimpleExecutor(this.fileQueueSize, this.numberWorkerThreads);
   }
 
@@ -56,6 +59,7 @@ public class S3CopyReducer implements Reducer<Text, FilePairInfo, Text, FilePair
       FilePairInfo pair = (FilePairInfo) iterator.next();
       log.info(String.format("get filepair %s: [%s]", text.toString(), pair.toString()));
       count++;
+      this.executor.execute(new S3GetFileRunnable(pair, this));
     }
   }
 

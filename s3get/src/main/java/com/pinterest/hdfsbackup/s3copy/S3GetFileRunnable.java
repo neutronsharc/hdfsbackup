@@ -9,11 +9,11 @@ import org.apache.commons.logging.LogFactory;
  */
 public class S3GetFileRunnable implements Runnable {
   private static final Log log = LogFactory.getLog(S3GetFileRunnable.class);
-  S3CopyReducer getReducer;
+  S3CopyReducer s3CopyReducer;
   FilePairInfo filePair;
 
-  S3GetFileRunnable(FilePairInfo filePair, S3CopyReducer getReducer) {
-    this.getReducer = getReducer;
+  S3GetFileRunnable(FilePairInfo filePair, S3CopyReducer reducer) {
+    this.s3CopyReducer = reducer;
     this.filePair = filePair;
   }
   @Override
