@@ -1,4 +1,4 @@
-package com.pinterest.hdfsbackup.s3get;
+package com.pinterest.hdfsbackup.s3copy;
 
 import com.pinterest.hdfsbackup.utils.DirWalker;
 import com.pinterest.hdfsbackup.utils.FileListingInDir;
@@ -18,13 +18,13 @@ import java.util.UUID;
 /**
  * Created by shawn on 8/26/14.
  */
-public class S3Get extends Configured implements Tool {
-  private static final Log log = LogFactory.getLog(S3Get.class);
+public class S3Copy extends Configured implements Tool {
+  private static final Log log = LogFactory.getLog(S3Copy.class);
   private Configuration conf;
 
   @Override
   public int run(String[] strings) throws Exception {
-    S3GetOptions options = new S3GetOptions(strings);
+    S3CopyOptions options = new S3CopyOptions(strings);
     if (options.helpDefined) {
       return 0;
     }
@@ -53,24 +53,21 @@ public class S3Get extends Configured implements Tool {
       return 1;
     }
     //Job job = new Job();
-    JobConf job = new JobConf(getConf(), S3Get.class);
+    JobConf job = new JobConf(getConf(), S3Copy.class);
     job.setJobName(String.format("S3Get  %s => %s,  %s checksum",
                                     options.srcPath, options.destPath,
                                     options.verifyChecksum ? "with" : "no"));
     job.setInputFormat(SequenceFileInputFormat.class);
-    job.setOutputKeyClass(Text.class);
-    job.setOutputValueClass(FilePairInfo.class);
     job.setOutputFormat(TextOutputFormat.class);
 
     FileInputFormat.addInputPath(job, mapInputDirPath);
     FileOutputFormat.setOutputPath(job, redOutputDirPath);
 
-    job.setMapperClass(S3GetMapper.class);
-    job.setReducerClass(S3GetReducer.class);
-
-
     job.setOutputKeyClass(Text.class);
     job.setOutputValueClass(FilePairInfo.class);
+
+    job.setMapperClass(S3CopyMapper.class);
+    job.setReducerClass(S3CopyReducer.class);
 
     try {
       log.info("before MR job...");

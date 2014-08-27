@@ -55,7 +55,7 @@
                             <transformers>
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.pinterest.hdfsbackup.s3get.Main</mainClass>
+                                    <mainClass>com.pinterest.hdfsbackup.s3copy.Main</mainClass>
                                 </transformer>
                             </transformers>
                         </configuration>

@@ -1,4 +1,4 @@
-package com.pinterest.hdfsbackup.s3get;
+package com.pinterest.hdfsbackup.s3copy;
 
 import com.pinterest.hdfsbackup.utils.FilePairInfo;
 import org.apache.commons.logging.Log;
@@ -15,9 +15,9 @@ import java.io.IOException;
 /**
  * Created by shawn on 8/26/14.
  */
-public class S3GetMapper
+public class S3CopyMapper
     implements Mapper<LongWritable, FilePairInfo, Text, FilePairInfo> {
-  private static final Log log = LogFactory.getLog(S3GetMapper.class);
+  private static final Log log = LogFactory.getLog(S3CopyMapper.class);
   private static long count;
   protected JobConf conf;
 
@@ -26,7 +26,7 @@ public class S3GetMapper
                   Reporter reporter) throws IOException {
     log.info(String.format("input: %d  [%s]", key.get(), filePair.toString()));
     count++;
-    collector.collect(new Text(key.toString()), filePair.clone());
+    collector.collect(new Text(key.toString()), filePair);
   }
 
   @Override
