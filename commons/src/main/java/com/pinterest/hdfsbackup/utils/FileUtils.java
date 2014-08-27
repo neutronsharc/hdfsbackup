@@ -6,9 +6,12 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.SequenceFile;
 
 import java.io.*;
 import java.security.MessageDigest;
+import java.util.Map;
 
 /**
  * Created by shawn on 8/22/14.
@@ -20,7 +23,8 @@ public class FileUtils {
   public static void init(Configuration conf) {
     setConf(conf);
   }
-  public static void setConf(Configuration conf) {
+
+  private static void setConf(Configuration conf) {
     FileUtils.conf = conf;
   }
 
@@ -63,6 +67,46 @@ public class FileUtils {
     return ostream;
   }
 
+  /**
+   * Create a HDFS dir.
+   * @param dirName
+   * @return
+   */
+  public static boolean createHDFSDir(String dirName) {
+    Path path = new Path(dirName);
+    try {
+      FileSystem fs = path.getFileSystem(FileUtils.conf);
+      fs.mkdirs(path);
+      return true;
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+    return false;
+  }
+
+  /**
+   * Delete a HDFS dir recursively.
+   * @param dirName
+   * @return
+   */
+  public static boolean deleteHDFSDir(String dirName) {
+    Path dirPath = new Path(dirName);
+    boolean recursive = true;
+    log.info("will delete hdfs dir: " + dirName);
+    try {
+      FileSystem.get(dirPath.toUri(), FileUtils.conf).delete(dirPath, recursive);
+      return true;
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+    return false;
+  }
+
+  /**
+   * Open a local disk file for read.
+   * @param filename
+   * @return
+   */
   public static InputStream openLocalInputStream(String filename) {
     FileInputStream fin = null;
     File file = null;
@@ -84,6 +128,11 @@ public class FileUtils {
     return null;
   }
 
+  /**
+   * Create a local disk file to write to.
+   * @param filename
+   * @return
+   */
   public static OutputStream openLocalOutputStream(String filename) {
     FileOutputStream fout = null;
     File file = null;
@@ -102,6 +151,11 @@ public class FileUtils {
     return null;
   }
 
+  /**
+   * Create a local directory.
+   * @param dirName
+   * @return
+   */
   public static boolean createLocalDir(String dirName) {
     File dir = new File(dirName);
     if (!dir.exists()) {
@@ -112,6 +166,11 @@ public class FileUtils {
     return false;
   }
 
+  /**
+   * Delete a local directory recursively.
+   * @param dirName
+   * @return
+   */
   public static boolean deleteLocalDir(String dirName) {
     File dir = new File(dirName);
     if (dir.exists()) {
@@ -129,24 +188,12 @@ public class FileUtils {
   }
 
   /**
-   * Delete a HDFS dir recursively.
-   * @param dirName
-   * @param conf
-   * @return
+   * Copy from input stream to output stream.  Update the digest if provided.
+   * @param ins
+   * @param outs
+   * @param md
+   * @return  number of bytes actually copied.  -1 if error occurs during copy.
    */
-  public static boolean deleteHDFSDir(String dirName, Configuration conf) {
-    Path dirPath = new Path(dirName);
-    boolean recursive = true;
-    log.info("will delete hdfs dir: " + dirName);
-    try {
-      FileSystem.get(dirPath.toUri(), conf).delete(dirPath, recursive);
-      return true;
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
-    return false;
-  }
-
   public static long copyStream(InputStream ins, OutputStream outs, MessageDigest md) {
     long copiedBytes = 0;
     byte[] buffer = new byte[1024 * 1024];
@@ -156,13 +203,107 @@ public class FileUtils {
         if (md != null) {
           md.update(buffer, 0, len);
         }
-        outs.write(buffer, 0, len);
+        if (outs != null) {
+          outs.write(buffer, 0, len);
+        }
         copiedBytes += len;
       }
     } catch (IOException e) {
       e.printStackTrace();
+      return -1;
     }
     return copiedBytes;
   }
 
+  /**
+   * Compute a HDFS file's checksum.
+   * @param ins
+   * @param md
+   * @return
+   */
+  public static boolean computeHDFSDigest(InputStream ins, MessageDigest md) {
+    byte[] buffer = new byte[1024 * 1024];
+    try {
+      int len = 0;
+      while ((len = ins.read(buffer)) > 0) {
+        md.update(buffer, 0, len);
+      }
+    } catch (IOException e) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Pair up each object in src dir with its counterpart in destination dir,
+   * and save the pairs to a file specified by "pairFilePath".
+   *
+   * @param srcFileListing:   list of file objects in src dir.
+   * @param destDirname:      destination dir name. Usually we will compare src/dest dir,
+   *                   or and copy src dir to dest dir.
+   * @param pairFilePath:     save file pair info to this file.
+   * @param conf
+   */
+  public static boolean createFilePairInfoFile(FileListingInDir srcFileListing,
+                                               String destDirname,
+                                               Path pairFilePath,
+                                               Configuration conf) {
+    log.info(String.format("will create FilePair: %d files, " +
+                               "%d dirs, save to '%s'",
+                              srcFileListing.getFileEntryCount(),
+                              srcFileListing.getDirEntryCount(),
+                              pairFilePath.toString()));
+    if (destDirname != null && destDirname.charAt(destDirname.length() - 1) != '/') {
+      destDirname = destDirname + "/";
+    }
+    SequenceFile.Writer writer = null;
+    try {
+      FileSystem fs = pairFilePath.getFileSystem(conf);
+      // the file format is:  <ID as text>  <file-pair info>
+      writer = SequenceFile.createWriter(fs,
+                                            conf,
+                                            pairFilePath,
+                                            LongWritable.class,
+                                            FilePairInfo.class,
+                                            SequenceFile.CompressionType.NONE);
+    } catch (IOException e) {
+      e.printStackTrace();
+      return false;
+    }
+    long filepairID = 0;
+    try {
+      for (Map.Entry<String, DirEntry> e : srcFileListing.dirEntries.entrySet()) {
+        DirEntry dirEntry = e.getValue();
+        FilePairInfo pair =
+            new FilePairInfo(dirEntry.baseDirname + "/" + dirEntry.entryName,
+                             destDirname == null ? "" : destDirname + dirEntry.entryName,
+                             false,
+                             0);
+        log.info("FilePair " + filepairID + " ::  " + pair.toString());
+        writer.append(new LongWritable(filepairID), pair);
+        filepairID++;
+      }
+      for (Map.Entry<String, DirEntry> e : srcFileListing.fileEntries.entrySet()) {
+        DirEntry fileEntry = e.getValue();
+        FilePairInfo pair =
+            new FilePairInfo(fileEntry.baseDirname + "/" + fileEntry.entryName,
+                                destDirname == null ? "" : destDirname + fileEntry.entryName,
+                                true,
+                                fileEntry.fileSize);
+        log.info("FilePair " + filepairID + " ::  " + pair.toString());
+        writer.append(new LongWritable(filepairID), pair);
+        filepairID++;
+      }
+      return true;
+    } catch (IOException e) {
+      return false;
+    } finally {
+      try {
+        writer.close();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+      log.info("prepared " + filepairID + " obj-pairs");
+    }
+  }
 }

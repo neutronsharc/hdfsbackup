@@ -43,7 +43,6 @@
     <orderEntry type="library" scope="PROVIDED" name="Maven: hsqldb:hsqldb:1.8.0.10" level="project" />
     <orderEntry type="library" scope="PROVIDED" name="Maven: org.codehaus.jackson:jackson-mapper-asl:1.0.1" level="project" />
     <orderEntry type="library" scope="PROVIDED" name="Maven: org.codehaus.jackson:jackson-core-asl:1.0.1" level="project" />
-    <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-tools:1.0.3" level="project" />
     <orderEntry type="library" name="Maven: com.amazonaws:aws-java-sdk:1.6.2" level="project" />
     <orderEntry type="library" name="Maven: org.apache.httpcomponents:httpclient:4.2" level="project" />
     <orderEntry type="library" name="Maven: org.apache.httpcomponents:httpcore:4.2" level="project" />

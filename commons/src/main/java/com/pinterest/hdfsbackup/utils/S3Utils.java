@@ -1,4 +1,4 @@
-package com.pinterest.hdfsbackup.s3tools;
+package com.pinterest.hdfsbackup.utils;
 
 
 import com.amazonaws.AmazonClientException;

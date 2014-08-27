@@ -12,6 +12,7 @@
     <groupId>com.pinterest.hdfsbackup</groupId>
     <artifactId>commons</artifactId>
     <version>0.1</version>
+
     <dependencies>
         <dependency>
             <groupId>commons-io</groupId>
