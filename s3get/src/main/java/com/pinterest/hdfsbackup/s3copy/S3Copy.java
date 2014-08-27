@@ -54,9 +54,11 @@ public class S3Copy extends Configured implements Tool {
     }
     //Job job = new Job();
     JobConf job = new JobConf(getConf(), S3Copy.class);
+    // set up options
     job.setJobName(String.format("S3Get  %s => %s,  %s checksum",
                                     options.srcPath, options.destPath,
                                     options.verifyChecksum ? "with" : "no"));
+
     job.setInputFormat(SequenceFileInputFormat.class);
     job.setOutputFormat(TextOutputFormat.class);
 

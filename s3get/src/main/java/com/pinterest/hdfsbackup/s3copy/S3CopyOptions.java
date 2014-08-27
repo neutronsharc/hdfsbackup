@@ -17,6 +17,10 @@ public class S3CopyOptions {
   public boolean helpDefined = false;
   public boolean verifyChecksum = false;
   public boolean verbose = false;
+  public boolean useMultipart = true;
+  public int queueSize = 100;
+  public int workerThreads = 10;
+  public int chunkSizeMB = 32;
 
   public S3CopyOptions() { }
 
@@ -28,29 +32,52 @@ public class S3CopyOptions {
     SimpleOption verbose = options.noArg("--verbose", "be verbose");
     OptionWithArg srcOption = options.withArg("--src", "Source directory");
     OptionWithArg destOption = options.withArg("--dest", "Dest directory");
+    OptionWithArg queueSize = options.withArg("--queuesize", "file list queue size");
+    OptionWithArg numberThreads = options.withArg("--workerthreads",
+                                                     "worker threads per task");
+    OptionWithArg chunkSizeMB = options.withArg("--chunksizemb",
+                                                   "multi-part chunk size in MB");
+    SimpleOption useMultipart = options.noArg("--multipart", "use multipart operation");
+    SimpleOption noMultipart = options.noArg("--nomultipart", "don't use multipart operation");
 
     options.parseArguments(args);
-
+    srcOption.require();
     if (helpOption.defined()) {
       log.info(options.helpText());
-      helpDefined = true;
+      this.helpDefined = true;
       return;
     }
+    if (useMultipart.defined() && noMultipart.defined()) {
+      throw new RuntimeException("cannot define multipart and nomultipart at same time.");
+    }
+    if (useMultipart.defined()) {
+      this.useMultipart = true;
+    }
+    if (noMultipart.defined()) {
+      this.useMultipart = false;
+    }
+    if (queueSize.defined()) {
+      this.queueSize = Integer.parseInt(queueSize.getValue());
+    }
+    if (numberThreads.defined()) {
+      this.workerThreads = Integer.parseInt(numberThreads.getValue());
+    }
+    if (chunkSizeMB.defined()) {
+      this.chunkSizeMB = Integer.parseInt(chunkSizeMB.getValue());
+    }
+
     if (verifyChecksum.defined()) {
       this.verifyChecksum = true;
     }
     if (verbose.defined()) {
       this.verbose = true;
     }
-    srcOption.require();
-    //destOption.require();
     if (srcOption.defined()) {
       srcPath = srcOption.getValue();
     }
     if (destOption.defined()) {
       destPath = destOption.getValue();
     }
-
   }
 
 }

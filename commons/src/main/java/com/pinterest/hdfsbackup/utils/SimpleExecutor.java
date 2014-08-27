@@ -53,6 +53,7 @@ public class SimpleExecutor implements Executor
     for (int i = 0; i < this.workers.length; i++)
       try {
         this.workers[i].join();
+        log.info(String.format("worker thread exit %d/%d", i + 1, this.workers.length));
       }
       catch (InterruptedException e) {
         log.error("Interrupted while waiting for workers", e);
@@ -126,6 +127,7 @@ public class SimpleExecutor implements Executor
             SimpleExecutor.log.error("Worker task threw exception", e);
           }
         }
+        log.info("worker thread now exit...");
       } catch (InterruptedException e) {
       }
     }
