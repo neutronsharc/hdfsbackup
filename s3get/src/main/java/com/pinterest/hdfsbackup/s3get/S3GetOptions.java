@@ -1,17 +1,16 @@
-package com.pinterest.hdfsbackup.test;
+package com.pinterest.hdfsbackup.s3get;
 
 import com.pinterest.hdfsbackup.options.OptionWithArg;
-import com.pinterest.hdfsbackup.options.SimpleOption;
 import com.pinterest.hdfsbackup.options.Options;
+import com.pinterest.hdfsbackup.options.SimpleOption;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-
 /**
- * Created by shawn on 8/23/14.
+ * Created by shawn on 8/26/14.
  */
-public class TestOptions {
-  private static final Log log = LogFactory.getLog(TestOptions.class);
+public class S3GetOptions {
+  private static final Log log = LogFactory.getLog(S3GetOptions.class);
 
   public String srcPath = null;
   public String destPath = null;
@@ -19,9 +18,9 @@ public class TestOptions {
   public boolean verifyChecksum = false;
   public boolean verbose = false;
 
-  public TestOptions() { }
+  public S3GetOptions() { }
 
-  public TestOptions(String args[]) {
+  public S3GetOptions(String args[]) {
     Options options = new Options();
 
     SimpleOption helpOption = options.noArg("--help", "Print help text");
@@ -35,6 +34,7 @@ public class TestOptions {
     if (helpOption.defined()) {
       log.info(options.helpText());
       helpDefined = true;
+      return;
     }
     if (verifyChecksum.defined()) {
       this.verifyChecksum = true;
@@ -42,7 +42,7 @@ public class TestOptions {
     if (verbose.defined()) {
       this.verbose = true;
     }
-    //srcOption.require();
+    srcOption.require();
     //destOption.require();
     if (srcOption.defined()) {
       srcPath = srcOption.getValue();
@@ -54,3 +54,4 @@ public class TestOptions {
   }
 
 }
+
