@@ -1,4 +1,4 @@
-package com.pinterest.hdfsbackup.s3get;
+package com.pinterest.hdfsbackup.s3copy;
 
 import junit.framework.Test;
 import org.apache.commons.logging.Log;
@@ -22,7 +22,7 @@ public class Main {
     log.info("name = " + name.toString());
 
     try {
-      System.exit(ToolRunner.run(new S3Get(), args));
+      System.exit(ToolRunner.run(new S3Copy(), args));
     } catch (Exception e) {
       e.printStackTrace();
       System.exit(1);

@@ -12,7 +12,7 @@ import java.io.IOException;
 /**
  * Created by shawn on 8/26/14.
  */
-public class FilePairInfo implements Cloneable, Writable {
+public class FilePairInfo implements Writable {
   public Text srcFile;
   public Text destFile;
   public BooleanWritable isFile;
@@ -57,13 +57,6 @@ public class FilePairInfo implements Cloneable, Writable {
     for (Writable field : getFields()) {
      field.readFields(dataInput);
     }
-  }
-
-  public FilePairInfo clone() {
-    return new FilePairInfo(this.srcFile.toString(),
-                            this.destFile.toString(),
-                            this.isFile.get(),
-                            this.fileSize.get());
   }
 
 }

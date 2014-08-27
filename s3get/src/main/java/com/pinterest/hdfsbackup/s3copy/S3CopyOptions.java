@@ -1,4 +1,4 @@
-package com.pinterest.hdfsbackup.s3get;
+package com.pinterest.hdfsbackup.s3copy;
 
 import com.pinterest.hdfsbackup.options.OptionWithArg;
 import com.pinterest.hdfsbackup.options.Options;
@@ -9,8 +9,8 @@ import org.apache.commons.logging.LogFactory;
 /**
  * Created by shawn on 8/26/14.
  */
-public class S3GetOptions {
-  private static final Log log = LogFactory.getLog(S3GetOptions.class);
+public class S3CopyOptions {
+  private static final Log log = LogFactory.getLog(S3CopyOptions.class);
 
   public String srcPath = null;
   public String destPath = null;
@@ -18,9 +18,9 @@ public class S3GetOptions {
   public boolean verifyChecksum = false;
   public boolean verbose = false;
 
-  public S3GetOptions() { }
+  public S3CopyOptions() { }
 
-  public S3GetOptions(String args[]) {
+  public S3CopyOptions(String args[]) {
     Options options = new Options();
 
     SimpleOption helpOption = options.noArg("--help", "Print help text");
