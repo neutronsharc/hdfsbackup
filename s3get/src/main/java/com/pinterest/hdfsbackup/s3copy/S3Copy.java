@@ -1,9 +1,8 @@
 package com.pinterest.hdfsbackup.s3copy;
 
-import com.pinterest.hdfsbackup.utils.DirWalker;
-import com.pinterest.hdfsbackup.utils.FileListingInDir;
-import com.pinterest.hdfsbackup.utils.FilePairInfo;
-import com.pinterest.hdfsbackup.utils.FileUtils;
+import com.pinterest.hdfsbackup.s3tools.S3CopyOptions;
+import com.pinterest.hdfsbackup.s3tools.S3Downloader;
+import com.pinterest.hdfsbackup.utils.*;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -13,6 +12,7 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.*;
 import org.apache.hadoop.util.Tool;
 
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -28,28 +28,50 @@ public class S3Copy extends Configured implements Tool {
     if (options.helpDefined) {
       return 0;
     }
-    FileUtils.init(this.conf);
+    options.populateFromConfiguration(this.conf);
+    options.showCopyOptions();
 
     DirWalker dirWalker = new DirWalker(this.conf);
     FileListingInDir srcFileList = dirWalker.walkDir(options.srcPath);
     if (options.verbose) {
       srcFileList.dump();
     }
-    if (!options.verifyChecksum && options.destPath == null) {
-      return 0;
+
+    FSType srcType = FileUtils.getFSType(options.srcPath);
+    if (srcType != FSType.S3) {
+      log.info("source dir must be S3.");
+      return 1;
     }
 
+    // A special case: only download one S3 file.
+    if (srcFileList.getFileEntryCount() == 1) {
+      S3Downloader s3Downloader = new S3Downloader(this.conf, options);
+      for (Map.Entry<String, DirEntry> e : srcFileList.getFileEntries()) {
+        DirEntry srcEntry = e.getValue();
+        assert(srcEntry.isFile == true);
+        if (s3Downloader.DownloadFile(srcEntry, options.destPath, options.verifyChecksum)) {
+          return 0;
+        } else {
+          return 1;
+        }
+      }
+    }
+
+    // TODO(shawn@): support local file.
+    FSType destType = FileUtils.getFSType(options.destPath);
+    assert(destType == FSType.HDFS);
+
+    // need to copy from src to dest dir.
+    // We will overwrite all contents in dest dir.
     String tempDirRoot = "hdfs:///tmp/" + UUID.randomUUID();
     Path mapInputDirPath = new Path(tempDirRoot, "map-input");
     Path redOutputDirPath = new Path(tempDirRoot, "red-output");
     Path filePairPath = new Path(mapInputDirPath, "file-pair");
-    //FileUtils.deleteHDFSDir(mapInputDirPath.toString());
-    //FileUtils.deleteHDFSDir(redOutputDirPath.toString());
     log.info("Use tmp dir: " + tempDirRoot);
 
     if (!FileUtils.createFilePairInfoFile(srcFileList, options.destPath, filePairPath, getConf())) {
       log.info("failed to create file pair " + filePairPath.toString());
-      FileUtils.deleteHDFSDir(tempDirRoot);
+      FileUtils.deleteHDFSDir(tempDirRoot, this.conf);
       return 1;
     }
     //Job job = new Job();
@@ -83,14 +105,13 @@ public class S3Copy extends Configured implements Tool {
       int retcode = (int) outputRecords;
       return retcode;
     } finally {
-      FileUtils.deleteHDFSDir(tempDirRoot);
+      FileUtils.deleteHDFSDir(tempDirRoot, this.conf);
     }
   }
 
   @Override
   public void setConf(Configuration entries) {
     this.conf = entries;
-
   }
 
   @Override

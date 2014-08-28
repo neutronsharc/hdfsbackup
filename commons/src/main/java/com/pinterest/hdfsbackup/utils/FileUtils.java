@@ -10,6 +10,7 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.SequenceFile;
 
 import java.io.*;
+import java.net.URI;
 import java.security.MessageDigest;
 import java.util.Map;
 
@@ -18,26 +19,34 @@ import java.util.Map;
  */
 public class FileUtils {
   static final Log log = LogFactory.getLog(FileUtils.class);
-  private static Configuration conf = null;
+  //private static Configuration conf = null;
 
-  public static void init(Configuration conf) {
-    setConf(conf);
+  public static FSType getFSType(String filename) {
+    Path path = new Path(filename);
+    URI uri = path.toUri();
+    String scheme = uri.getScheme();
+    if (scheme == null) {
+      return FSType.HDFS;
+    } else if (scheme.equalsIgnoreCase("s3") || scheme.equalsIgnoreCase("s3n")) {
+      return FSType.S3;
+    } else if (scheme.equalsIgnoreCase("file")) {
+      return FSType.LOCAL;
+    } else {
+      return FSType.UNKNOWN;
+    }
   }
-
-  private static void setConf(Configuration conf) {
-    FileUtils.conf = conf;
-  }
-
   /**
    * Open a HDFS file to read from.
    * @param filename
+   * @param configuration
    * @return
    */
-  public static InputStream openHDFSInputStream(String filename) {
+  public static InputStream openHDFSInputStream(String filename,
+                                                Configuration configuration) {
     InputStream istream = null;
     try {
       Path filePath = new Path(filename);
-      FileSystem fs = filePath.getFileSystem(FileUtils.conf);
+      FileSystem fs = filePath.getFileSystem(configuration);
       istream = fs.open(filePath);
     } catch (IOException e) {
       log.info("failed to open input file " + filename, e);
@@ -52,12 +61,12 @@ public class FileUtils {
    * @param filename
    * @return
    */
-  public static OutputStream openHDFSOutputStream(String filename) {
+  public static OutputStream openHDFSOutputStream(String filename, Configuration conf) {
     OutputStream ostream = null;
     boolean overwrite = true;
     try {
       Path outputFilePath = new Path(filename);
-      FileSystem outputFs = outputFilePath.getFileSystem(FileUtils.conf);
+      FileSystem outputFs = outputFilePath.getFileSystem(conf);
       ostream = outputFs.create(outputFilePath, overwrite);
     } catch (IOException e) {
       log.info("failed to open output file " + filename, e);
@@ -72,10 +81,10 @@ public class FileUtils {
    * @param dirName
    * @return
    */
-  public static boolean createHDFSDir(String dirName) {
+  public static boolean createHDFSDir(String dirName, Configuration conf) {
     Path path = new Path(dirName);
     try {
-      FileSystem fs = path.getFileSystem(FileUtils.conf);
+      FileSystem fs = path.getFileSystem(conf);
       fs.mkdirs(path);
       return true;
     } catch (IOException e) {
@@ -87,14 +96,15 @@ public class FileUtils {
   /**
    * Delete a HDFS dir recursively.
    * @param dirName
+   * @param configuration
    * @return
    */
-  public static boolean deleteHDFSDir(String dirName) {
+  public static boolean deleteHDFSDir(String dirName, Configuration configuration) {
     Path dirPath = new Path(dirName);
     boolean recursive = true;
     log.info("will delete hdfs dir: " + dirName);
     try {
-      FileSystem.get(dirPath.toUri(), FileUtils.conf).delete(dirPath, recursive);
+      FileSystem.get(dirPath.toUri(), configuration).delete(dirPath, recursive);
       return true;
     } catch (IOException e) {
       e.printStackTrace();
@@ -221,7 +231,7 @@ public class FileUtils {
    * @param md
    * @return
    */
-  public static boolean computeHDFSDigest(InputStream ins, MessageDigest md) {
+  public static boolean computeFileDigest(InputStream ins, MessageDigest md) {
     byte[] buffer = new byte[1024 * 1024];
     try {
       int len = 0;
@@ -279,7 +289,7 @@ public class FileUtils {
                              destDirname == null ? "" : destDirname + dirEntry.entryName,
                              false,
                              0);
-        log.info("FilePair " + filepairID + " ::  " + pair.toString());
+        //log.info("FilePair " + filepairID + " ::  " + pair.toString());
         writer.append(new LongWritable(filepairID), pair);
         filepairID++;
       }
@@ -290,7 +300,7 @@ public class FileUtils {
                                 destDirname == null ? "" : destDirname + fileEntry.entryName,
                                 true,
                                 fileEntry.fileSize);
-        log.info("FilePair " + filepairID + " ::  " + pair.toString());
+        //log.info("FilePair " + filepairID + " ::  " + pair.toString());
         writer.append(new LongWritable(filepairID), pair);
         filepairID++;
       }

@@ -51,11 +51,6 @@ public class Utils
     return name.substring(0, index) + suffix;
   }
 
-  public static boolean isS3Scheme(String scheme)
-  {
-    return (scheme.equals("s3")) || (scheme.equals("s3n"));
-  }
-
   public static ThreadPoolExecutor createDefaultExecutorService() {
     ThreadFactory threadFactory = new ThreadFactory() {
       private int threadCount = 1;

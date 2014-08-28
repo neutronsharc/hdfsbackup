@@ -15,6 +15,7 @@ public class Main {
 
   public static void main(String args[]) {
     log.info("run with options: " + Arrays.toString(args));
+
     try {
       System.exit(ToolRunner.run(new S3Copy(), args));
     } catch (Exception e) {

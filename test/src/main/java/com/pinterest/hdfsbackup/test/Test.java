@@ -2,15 +2,17 @@ package com.pinterest.hdfsbackup.test;
 
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.pinterest.hdfsbackup.s3tools.S3CopyOptions;
 import com.pinterest.hdfsbackup.s3tools.S3Downloader;
 import com.pinterest.hdfsbackup.utils.DirWalker;
 import com.pinterest.hdfsbackup.utils.FileListingInDir;
-import com.pinterest.hdfsbackup.utils.FileUtils;
 import com.pinterest.hdfsbackup.utils.S3Utils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 
+import java.net.URI;
 import java.util.Arrays;
 
 /**
@@ -26,8 +28,19 @@ public class Test {
     if (options.helpDefined) {
       return;
     }
+
+    System.out.println(System.getProperty("java.class.path"));
+
+    ///////////////////
+    // a file uri must be:  "file:///xxxx/xxx".
+    Path localPath = new Path("file:///tmp/dir1/");
+    URI baseUri = localPath.toUri();
+    Path s3Path = new Path("s3n://pinterest-namenode-backup/test/tos3dir/1g");
+    URI s3Uri = s3Path.toUri();
+    Path hdfsPath = new Path("/user/shawn/test");
+    URI hdfsUri = hdfsPath.toUri();
+
     Configuration conf = new Configuration();
-    FileUtils.init(conf);
 
     //testS3(conf, options);
     testDir(conf, options);
@@ -47,7 +60,7 @@ public class Test {
     String destDirName = options.destPath;
     boolean doChecksum = true;
 
-    S3Downloader s3Downloader = new S3Downloader(conf);
+    S3Downloader s3Downloader = new S3Downloader(conf, new S3CopyOptions());
     boolean ret = s3Downloader.DownloadFile(bucket, key,
                                             (destDirName == null) ? destDirName :
                                               destDirName + "/" + key,
