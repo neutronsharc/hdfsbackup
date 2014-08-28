@@ -90,4 +90,9 @@ public class S3Utils {
         .append("\nRequest ID:       " + ase.getRequestId());
     return sb.toString();
   }
+
+  public static boolean isS3Scheme(String scheme)
+  {
+    return (scheme.equals("s3")) || (scheme.equals("s3n"));
+  }
 }

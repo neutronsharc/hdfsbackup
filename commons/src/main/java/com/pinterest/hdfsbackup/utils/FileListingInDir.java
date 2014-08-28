@@ -5,6 +5,7 @@ import org.apache.commons.logging.LogFactory;
 
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.TreeMap;
 
 /**
@@ -41,12 +42,20 @@ public class FileListingInDir {
     dirEntries = new TreeMap<String, DirEntry>();
   }
 
-  long getFileEntryCount() {
+  public long getEntryCount() {
+    return getFileEntryCount() + getDirEntryCount();
+  }
+
+  public long getFileEntryCount() {
     return fileEntries.size();
   }
 
-  long getDirEntryCount() {
+  public long getDirEntryCount() {
     return dirEntries.size();
+  }
+
+  public Set<Entry<String, DirEntry>> getFileEntries() {
+    return fileEntries.entrySet();
   }
 
   public String toString() {

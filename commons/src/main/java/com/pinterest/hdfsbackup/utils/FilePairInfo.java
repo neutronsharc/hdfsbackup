@@ -37,7 +37,7 @@ public class FilePairInfo implements Writable {
   }
 
   public String toString() {
-    return String.format("'%s' : '%s' : %s : %d", this.srcFile,
+    return String.format("[ '%s' : '%s' : %s : %d ]", this.srcFile,
                             this.destFile, this.isFile.get(), this.fileSize.get());
   }
 

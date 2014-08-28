@@ -7,6 +7,7 @@ import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.S3Object;
+import com.pinterest.hdfsbackup.utils.DirEntry;
 import com.pinterest.hdfsbackup.utils.FileUtils;
 import com.pinterest.hdfsbackup.utils.S3Utils;
 import com.pinterest.hdfsbackup.utils.Utils;
@@ -18,10 +19,14 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import java.io.*;
+import java.net.URI;
 import java.nio.charset.Charset;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.*;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -34,17 +39,67 @@ public class S3Downloader {
   Configuration conf;
   AmazonS3Client s3client;
   ThreadPoolExecutor threadPool;
+  S3CopyOptions options;
 
-  public S3Downloader(Configuration conf) {
+  public S3Downloader(Configuration conf, S3CopyOptions options) {
     this.conf = conf;
     this.s3client = S3Utils.createAmazonS3Client(conf);
     this.threadPool = Utils.createDefaultExecutorService();
+    this.options = options;
+  }
+
+  public void setOptions(S3CopyOptions options) {
+    this.options = options;
   }
 
   public void close() {
     for (Runnable runnable : this.threadPool.shutdownNow()) {
     }
     this.s3client.shutdown();
+  }
+
+  /**
+   * Download an S3 object.
+   * The srcEntry must be an valid S3 object.
+   *
+   * @param srcEntry
+   * @param destDirname
+   * @return
+   */
+  public boolean DownloadFile(DirEntry srcEntry, String destDirname, boolean verifyChecksum) {
+    String srcFilename = srcEntry.baseDirname + "/" + srcEntry.entryName;
+    String destFilename = null;
+    if (destDirname != null) {
+      if (destDirname.endsWith("/")) {
+        destFilename = destDirname + srcEntry.entryName;
+      } else {
+        destFilename = destDirname + "/" + srcEntry.entryName;
+      }
+    }
+
+    long expectedSize = srcEntry.fileSize;
+
+    // get bucket and key of the object.
+    Path srcPath = new Path(srcFilename);
+    URI srcUri = srcPath.toUri();
+    String bucket = srcUri.getHost();
+    String key = srcUri.getPath();
+    if (key.startsWith("/")) {
+      key = key.substring(1);
+    }
+    return DownloadFile(bucket, key, destFilename, verifyChecksum);
+  }
+
+  public boolean DownloadFile(String srcFilename, String destFilename, boolean verifyChecksum) {
+    // get bucket and key of the object.
+    Path srcPath = new Path(srcFilename);
+    URI srcUri = srcPath.toUri();
+    String bucket = srcUri.getHost();
+    String key = srcUri.getPath();
+    if (key.startsWith("/")) {
+      key = key.substring(1);
+    }
+    return DownloadFile(bucket, key, destFilename, verifyChecksum);
   }
 
   public boolean DownloadFile(String bucket,
@@ -115,7 +170,7 @@ public class S3Downloader {
       if (metadata.getContentLength() == 0) {
         // the object is zero size.
         log.info(String.format("object %s/%s is zero size.", bucket, key));
-        OutputStream outs = FileUtils.openHDFSOutputStream(destFilename);
+        OutputStream outs = FileUtils.openHDFSOutputStream(destFilename, this.conf);
         if (outs != null) {
           try {
             outs.close();
@@ -264,7 +319,7 @@ public class S3Downloader {
           bInput = new ByteArrayInputStream(bOutput.toByteArray());
         }
         if (fileOutStream == null) {
-          fileOutStream = FileUtils.openHDFSOutputStream(destFilename);
+          fileOutStream = FileUtils.openHDFSOutputStream(destFilename, this.conf);
         }
         if (fileOutStream == null || bInput == null) {
           continue;
@@ -332,19 +387,21 @@ public class S3Downloader {
         return false;
       }
     }
-    log.info(String.format("will multipart download %s/%s and no save", bucket, key));
-    // 2. submit download part requests.
+     // 2. submit download part requests.
     List<Future<RangeGetResult>> inflightParts = new LinkedList<Future<RangeGetResult>>();
     List<RangeGetResult> partResults = new LinkedList<RangeGetResult>();
     long currentOffset = 0;
     long endOffset;
     long finishedParts = 0;
     long partNumber = 0;
-    long partSize = 1024L * 1024 * 32;
+    long partSize = this.options.chunkSize; //1024L * 1024 * 32;
     long objectSize = metadata.getContentLength();
     long numberOfParts = (objectSize + partSize - 1) / partSize;
     long maxInflightParts = 30;
     MessageDigest md = null;
+    log.info(String.format("will multipart download %s/%s at chunk size %d, total %d bytes" +
+                               " to dest : %s",
+                              bucket, key, partSize, objectSize, destFilename));
     try {
       md = MessageDigest.getInstance("MD5");
     } catch (NoSuchAlgorithmException e) {
@@ -355,7 +412,7 @@ public class S3Downloader {
     long bytesCopied = 0;
     OutputStream destOutStream = null;
     if (destFilename != null) {
-      destOutStream = FileUtils.openHDFSOutputStream(destFilename);
+      destOutStream = FileUtils.openHDFSOutputStream(destFilename, this.conf);
       if (destOutStream == null) {
         log.info("Unable to open dest file: " + destFilename);
         return false;
@@ -436,7 +493,7 @@ public class S3Downloader {
       } catch (IOException e) {
         e.printStackTrace();
       }
-      FileUtils.deleteHDFSDir(destFilename);
+      FileUtils.deleteHDFSDir(destFilename, this.conf);
     }
     return ret;
   }
@@ -549,7 +606,7 @@ public class S3Downloader {
       bytesCopied = 0;
       try {
         if (destFilename.length() > 0) {
-          destOutStream = FileUtils.openHDFSOutputStream(destFilename);
+          destOutStream = FileUtils.openHDFSOutputStream(destFilename, this.conf);
           if (destOutStream == null) {
             continue;
           }

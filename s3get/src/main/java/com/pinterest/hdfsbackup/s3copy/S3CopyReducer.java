@@ -1,9 +1,11 @@
 package com.pinterest.hdfsbackup.s3copy;
 
+import com.pinterest.hdfsbackup.s3tools.S3CopyOptions;
 import com.pinterest.hdfsbackup.utils.FilePairInfo;
 import com.pinterest.hdfsbackup.utils.SimpleExecutor;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.OutputCollector;
@@ -11,7 +13,9 @@ import org.apache.hadoop.mapred.Reducer;
 import org.apache.hadoop.mapred.Reporter;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Set;
 
 /**
  * Created by shawn on 8/26/14.
@@ -22,31 +26,40 @@ public class S3CopyReducer implements Reducer<Text, FilePairInfo, Text, FilePair
   private long count = 0;
   private SimpleExecutor executor;
   private Reporter reporter;
-
-  public int fileQueueSize;
-  public int numberWorkerThreads;
-  public long multipartChunkSize;
-  public boolean userMultipart;
-  public boolean checksum;
+  OutputCollector<Text, FilePairInfo> collector;
+  S3CopyOptions options;
+  Set<FilePairInfo> unfinishedFiles;
 
   @Override
   public void close() throws IOException {
     log.info("has posted " + count + " file pairs, wait for completion...");
     this.executor.close();
-    log.info("has finished downloading " + count + " file pairs");
+    log.info("has processed " + count + " file pairs");
+    synchronized (this) {
+      if (this.unfinishedFiles.size() > 0) {
+        log.info(String.format("Error: %d files failed to copy ::",
+                                  this.unfinishedFiles.size()));
+        for (FilePairInfo pair : this.unfinishedFiles) {
+          log.info("\t" + pair.toString());
+          this.collector.collect(pair.srcFile, pair);
+        }
+      }
+    }
+  }
+
+  public Configuration getConf() {
+    return this.conf;
   }
 
   @Override
   public void configure(JobConf conf) {
     this.conf = conf;
-    // Each reducer has a queue to store file pairs to process.
-    this.fileQueueSize = conf.getInt("s3copy.queuesize", 100);
-    // Each reducer spawns this many worker threads.
-    this.numberWorkerThreads = conf.getInt("s3copy.workerthreads", 10);
-    this.userMultipart = conf.getBoolean("s3copy.multipart", true);
-    this.multipartChunkSize = conf.getInt("s3copy.chunksizemb", 32) * (1024L * 1024);
-    this.checksum = conf.getBoolean("s3copy.checksum", true);
-    this.executor = new SimpleExecutor(this.fileQueueSize, this.numberWorkerThreads);
+    this.options = new S3CopyOptions();
+    this.options.populateFromConfiguration(conf);
+    this.options.showCopyOptions();
+    this.executor = new SimpleExecutor(this.options.queueSize,
+                                       this.options.workerThreads);
+    unfinishedFiles = new HashSet<FilePairInfo>();
   }
 
   @Override
@@ -55,12 +68,36 @@ public class S3CopyReducer implements Reducer<Text, FilePairInfo, Text, FilePair
                      OutputCollector<Text, FilePairInfo> collector,
                      Reporter reporter) throws IOException {
     this.reporter = reporter;
+    this.collector = collector;
     while (iterator.hasNext()) {
       FilePairInfo pair = (FilePairInfo) iterator.next();
       log.info(String.format("get filepair %s: [%s]", text.toString(), pair.toString()));
       count++;
+      addUnfinishedFile(pair);
       this.executor.execute(new S3GetFileRunnable(pair, this));
     }
+  }
+
+  public boolean addUnfinishedFile(FilePairInfo pair) {
+    boolean ret;
+    synchronized (this) {
+      ret = this.unfinishedFiles.add(pair);
+    }
+    log.info("add unfinished-file: " + pair.toString() + ", res=" + ret);
+    return ret;
+  }
+
+  public boolean removeUnfinishedFile(FilePairInfo pair) {
+    boolean ret;
+    synchronized (this) {
+      ret = this.unfinishedFiles.remove(pair);
+    }
+    log.info("mark file finished: " + pair.toString() + ", res=" + ret);
+    return ret;
+  }
+
+  public synchronized boolean isFileFinished(FilePairInfo pair) {
+    return !this.unfinishedFiles.contains(pair);
   }
 
   public void progress() {
