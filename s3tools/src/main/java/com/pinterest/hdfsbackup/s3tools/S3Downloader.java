@@ -88,9 +88,12 @@ public class S3Downloader {
   }
 
   public boolean DownloadFile(String srcFilename, String destFilename, boolean verifyChecksum) {
-    // src entry is an empty dir,  only needs to create a dir.
-    if (destFilename != null && destFilename.endsWith("/")) {
-      return FileUtils.createHDFSDir(destFilename, this.conf);
+    if (srcFilename.endsWith("/")) {
+      // src entry is an empty dir,  only needs to create a dest dir.
+      if (destFilename != null && destFilename.endsWith("/")) {
+        return FileUtils.createHDFSDir(destFilename, this.conf);
+      }
+      return true;
     }
     // get bucket and key of the object.
     Path srcPath = new Path(srcFilename);
@@ -171,6 +174,7 @@ public class S3Downloader {
       if (metadata.getContentLength() == 0) {
         // the object is zero size.
         log.info(String.format("object %s/%s is zero size.", bucket, key));
+        if (destFilename == null) return true;
         OutputStream outs = FileUtils.openHDFSOutputStream(destFilename, this.conf);
         if (outs != null) {
           try {
@@ -179,12 +183,12 @@ public class S3Downloader {
           return true;
         }
       } else if (metadata.getContentLength() >= 1024 * 1024 * 4) {
-        // The object reaches certain size limit that makes multi-part download beneficial.
+        // The object reaches certain size limit that
+        // makes multi-part download beneficial.
         log.info(String.format("object %s/%s size = %d, use multi-part download",
                                   bucket, key, metadata.getContentLength()));
         if (this.options.useInterimFiles) {
-          // via interim files:  chunks are saved to local disks, then concatenate
-          // to hdfs.
+          // via interim files
           String interimDirname = "/tmp/" + UUID.randomUUID();
           try {
             if (!FileUtils.createLocalDir(interimDirname)) {
@@ -311,6 +315,9 @@ public class S3Downloader {
     }
 
     // Step 3: copy from buffer to destination file.
+    if (destFilename == null) {
+      return true;
+    }
     retry = 0;
     ByteArrayInputStream bInput = null;
     OutputStream fileOutStream = null;
@@ -428,7 +435,7 @@ public class S3Downloader {
     while (finishedParts < numberOfParts) {
       if (currentOffset < objectSize && inflightParts.size() < maxInflightParts) {
         endOffset = Math.min(currentOffset + partSize, objectSize) - 1;
-        log.info(String.format("will get part %d range [%d - %d]/%d for %s, no interim file",
+        log.info(String.format("will get part %d range [%d - %d] / %d for %s, no interim file",
                                   partNumber, currentOffset, endOffset, objectSize, key));
         inflightParts.add(this.threadPool.submit(new MultipartDownloadCallable(s3client,
                                                                                   bucket,
@@ -443,6 +450,7 @@ public class S3Downloader {
       }
       Future<RangeGetResult> part = inflightParts.get(0);
       if (part.isDone()) {
+        this.progress.progress();
         inflightParts.remove(0);
         finishedParts++;
         RangeGetResult r = null;
@@ -453,9 +461,7 @@ public class S3Downloader {
             partFailed = true;
             break;
           } else {
-            long len = FileUtils.copyStream(r.object.getObjectContent(),
-                                               destOutStream,
-                                               md);
+            long len = FileUtils.copyStream(r.object.getObjectContent(), destOutStream, md);
             r.object.getObjectContent().close();
             if (len == (r.end - r.begin + 1)) {
               bytesCopied += len;
@@ -577,6 +583,7 @@ public class S3Downloader {
           for (int i = 0; i < inflightParts.size(); i++) {
             Future<RangeGetResult> part = inflightParts.get(i);
             if (part.isDone()) {
+              this.progress.progress();
               anyPartDone = true;
               inflightParts.remove(i);
               partResults.add(part.get());
@@ -814,9 +821,9 @@ public class S3Downloader {
             outs.write(buffer, 0, len);
           }
           result.success = true;
-          log.info(String.format("saved %s/%s [%d, %d] to temp file %s in attempt %d",
-                                    this.s3bucket, this.s3key, this.begin,
-                                    this.end, this.interimFilename, retry));
+          //log.info(String.format("saved %s/%s [%d, %d] to temp file %s in attempt %d",
+          //                          this.s3bucket, this.s3key, this.begin,
+          //                          this.end, this.interimFilename, retry));
           return result;
         } catch (IOException e) {
           log.info("error saving part to interim file: " + toString()

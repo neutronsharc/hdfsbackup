@@ -56,8 +56,10 @@ public class S3Copy extends Configured implements Tool {
     }*/
 
     // TODO(shawn@): support local file.
-    FSType destType = FileUtils.getFSType(options.destPath);
-    assert(destType == FSType.HDFS);
+    if (options.destPath != null) {
+      FSType destType = FileUtils.getFSType(options.destPath);
+      assert (destType == FSType.HDFS);
+    }
 
     // need to copy from src to dest dir.
     // We will overwrite all contents in dest dir.
@@ -99,7 +101,7 @@ public class S3Copy extends Configured implements Tool {
       Counters.Group group = counters.getGroup("org.apache.hadoop.mapreduce.TaskCounter");
       //org.apache.hadoop.mapred.Task$Counter");
       long outputRecords = group.getCounterForName("REDUCE_OUTPUT_RECORDS").getValue();
-      log.info("MR job finished, get " + outputRecords + " output records");
+      log.info("MR job finished, " + outputRecords + " files failed to download");
       int retcode = (int) outputRecords;
       return retcode;
     } finally {

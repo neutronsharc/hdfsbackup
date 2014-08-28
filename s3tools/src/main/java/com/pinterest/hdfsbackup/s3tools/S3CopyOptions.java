@@ -41,12 +41,13 @@ public class S3CopyOptions {
    */
   public void populateFromConfiguration(Configuration conf) {
     // Each reducer has a queue to store file pairs to process.
-    this.queueSize = conf.getInt("s3copy.queueSize", 100);
+    this.queueSize = conf.getInt("s3copy.queueSize", 1000);
     // Each reducer spawns this many worker threads.
     this.workerThreads = conf.getInt("s3copy.workerThreads", 10);
     // If use multipart or not. It's hardwired to always be true. Don't overwrite it.
     this.useMultipart = conf.getBoolean("s3copy.multipart", true);
-    // Multipart chunk size.
+    // Multipart chunk size. This size should match with the multi-part upload
+    // chunk size for better performance.
     this.chunkSize = conf.getInt("s3copy.chunkSizeMB", 16) * 1024L * 1024;
     // Whether to verify checksum during transmit.
     this.verifyChecksum = conf.getBoolean("s3copy.checksum", true);
