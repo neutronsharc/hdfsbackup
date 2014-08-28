@@ -1,7 +1,7 @@
 package com.pinterest.hdfsbackup.s3copy;
 
 import com.pinterest.hdfsbackup.s3tools.S3CopyOptions;
-import com.pinterest.hdfsbackup.utils.FilePairInfo;
+import com.pinterest.hdfsbackup.utils.FilePair;
 import com.pinterest.hdfsbackup.utils.SimpleExecutor;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -20,15 +20,15 @@ import java.util.Set;
 /**
  * Created by shawn on 8/26/14.
  */
-public class S3CopyReducer implements Reducer<Text, FilePairInfo, Text, FilePairInfo> {
-  private static final Log log = LogFactory.getLog(S3CopyReducer.class);
+public class S3GetReducer implements Reducer<Text, FilePair, Text, FilePair> {
+  private static final Log log = LogFactory.getLog(S3GetReducer.class);
   private  JobConf conf;
   private long count = 0;
   private SimpleExecutor executor;
-  private Reporter reporter;
-  OutputCollector<Text, FilePairInfo> collector;
+  public Reporter reporter;
+  OutputCollector<Text, FilePair> collector;
   S3CopyOptions options;
-  Set<FilePairInfo> unfinishedFiles;
+  Set<FilePair> unfinishedFiles;
 
   @Override
   public void close() throws IOException {
@@ -39,11 +39,16 @@ public class S3CopyReducer implements Reducer<Text, FilePairInfo, Text, FilePair
       if (this.unfinishedFiles.size() > 0) {
         log.info(String.format("Error: %d files failed to copy ::",
                                   this.unfinishedFiles.size()));
-        for (FilePairInfo pair : this.unfinishedFiles) {
+        for (FilePair pair : this.unfinishedFiles) {
           log.info("\t" + pair.toString());
           this.collector.collect(pair.srcFile, pair);
         }
       }
+    }
+
+    if (this.unfinishedFiles.size() > 0) {
+      throw new RuntimeException(String.format("%d files unable to finish",
+                                                  this.unfinishedFiles.size()));
     }
   }
 
@@ -59,19 +64,19 @@ public class S3CopyReducer implements Reducer<Text, FilePairInfo, Text, FilePair
     this.options.showCopyOptions();
     this.executor = new SimpleExecutor(this.options.queueSize,
                                        this.options.workerThreads);
-    unfinishedFiles = new HashSet<FilePairInfo>();
+    unfinishedFiles = new HashSet<FilePair>();
   }
 
   @Override
   public void reduce(Text text,
-                     Iterator<FilePairInfo> iterator,
-                     OutputCollector<Text, FilePairInfo> collector,
+                     Iterator<FilePair> iterator,
+                     OutputCollector<Text, FilePair> collector,
                      Reporter reporter) throws IOException {
     this.reporter = reporter;
     this.collector = collector;
     int countLocal = 0;
     while (iterator.hasNext()) {
-      FilePairInfo pair = ((FilePairInfo)iterator.next()).clone();
+      FilePair pair = ((FilePair)iterator.next()).clone();
       log.info(String.format("Reducer get filepair %s: %s", text.toString(), pair.toString()));
       countLocal++;
       addUnfinishedFile(pair);
@@ -81,16 +86,17 @@ public class S3CopyReducer implements Reducer<Text, FilePairInfo, Text, FilePair
     this.count += countLocal;
   }
 
-  public boolean addUnfinishedFile(FilePairInfo pair) {
+  public boolean addUnfinishedFile(FilePair pair) {
     boolean ret;
     synchronized (this) {
       ret = this.unfinishedFiles.add(pair);
+      progress();
     }
     log.info("add unfinished-file: " + pair.toString() + ", res=" + ret);
     return ret;
   }
 
-  public boolean removeUnfinishedFile(FilePairInfo pair) {
+  public boolean removeUnfinishedFile(FilePair pair) {
     boolean ret;
     synchronized (this) {
       ret = this.unfinishedFiles.remove(pair);
@@ -99,7 +105,7 @@ public class S3CopyReducer implements Reducer<Text, FilePairInfo, Text, FilePair
     return ret;
   }
 
-  public synchronized boolean isFileFinished(FilePairInfo pair) {
+  public synchronized boolean isFileFinished(FilePair pair) {
     return !this.unfinishedFiles.contains(pair);
   }
 

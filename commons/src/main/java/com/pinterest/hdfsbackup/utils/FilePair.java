@@ -12,7 +12,7 @@ import java.io.IOException;
 /**
  * Created by shawn on 8/26/14.
  */
-public class FilePairInfo implements Writable {
+public class FilePair implements Writable {
   public Text srcFile;
   public Text destFile;
   public BooleanWritable isFile;
@@ -22,14 +22,14 @@ public class FilePairInfo implements Writable {
    * This init function is needed for SequenceFileRecordReader.createValue() to
    * init an object.   *
    */
-  public FilePairInfo() {
+  public FilePair() {
     this.srcFile = new Text();
     this.destFile = new Text();
     this.isFile = new BooleanWritable(false);
     this.fileSize = new LongWritable(0L);
   }
 
-  public FilePairInfo(String srcFile, String destFile, boolean isFile, long fileSize) {
+  public FilePair(String srcFile, String destFile, boolean isFile, long fileSize) {
     this.srcFile = new Text(srcFile);
     this.destFile = new Text(destFile);
     this.isFile = new BooleanWritable(isFile);
@@ -59,8 +59,8 @@ public class FilePairInfo implements Writable {
     }
   }
 
-  public FilePairInfo clone() {
-    return new FilePairInfo(this.srcFile.toString(),
+  public FilePair clone() {
+    return new FilePair(this.srcFile.toString(),
                             this.destFile.toString(),
                             this.isFile.get(),
                             this.fileSize.get());

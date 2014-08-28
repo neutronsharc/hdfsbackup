@@ -2,7 +2,7 @@ package com.pinterest.hdfsbackup.s3copy;
 
 import com.pinterest.hdfsbackup.s3tools.S3CopyOptions;
 import com.pinterest.hdfsbackup.s3tools.S3Downloader;
-import com.pinterest.hdfsbackup.utils.FilePairInfo;
+import com.pinterest.hdfsbackup.utils.FilePair;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -11,18 +11,18 @@ import org.apache.commons.logging.LogFactory;
  */
 public class S3GetFileRunnable implements Runnable {
   private static final Log log = LogFactory.getLog(S3GetFileRunnable.class);
-  S3CopyReducer s3CopyReducer;
-  FilePairInfo filePair;
+  S3GetReducer s3GetReducer;
+  FilePair filePair;
   S3CopyOptions options;
 
-  public S3GetFileRunnable(FilePairInfo filePair, S3CopyReducer reducer) {
-    this.s3CopyReducer = reducer;
+  public S3GetFileRunnable(FilePair filePair, S3GetReducer reducer) {
+    this.s3GetReducer = reducer;
     this.filePair = filePair;
     this.options = reducer.options;
   }
 
-  public S3GetFileRunnable(FilePairInfo filePair, S3CopyReducer reducer, S3CopyOptions options) {
-    this.s3CopyReducer = reducer;
+  public S3GetFileRunnable(FilePair filePair, S3GetReducer reducer, S3CopyOptions options) {
+    this.s3GetReducer = reducer;
     this.filePair = filePair;
     this.options = options;
   }
@@ -30,14 +30,16 @@ public class S3GetFileRunnable implements Runnable {
   @Override
   public void run() {
     log.info("Runnable start processing file pair: " + this.filePair.toString());
-    S3Downloader s3Downloader = new S3Downloader(this.s3CopyReducer.getConf(), this.options);
+    S3Downloader s3Downloader = new S3Downloader(this.s3GetReducer.getConf(),
+                                                 this.options,
+                                                 this.s3GetReducer.reporter);
     String destFilename = this.filePair.destFile.toString();
     boolean ret = s3Downloader.DownloadFile(this.filePair.srcFile.toString(),
                               destFilename.equals("") ? null : destFilename,
                               options.verifyChecksum);
     log.info("finish file pair: " + this.filePair.toString() + ", res = " + ret);
     if (ret) {
-      this.s3CopyReducer.removeUnfinishedFile(this.filePair);
+      this.s3GetReducer.removeUnfinishedFile(this.filePair);
     }
   }
 }
