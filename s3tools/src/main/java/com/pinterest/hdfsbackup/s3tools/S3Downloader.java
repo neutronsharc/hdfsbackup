@@ -17,16 +17,14 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.util.Progressable;
 
 import java.io.*;
 import java.net.URI;
 import java.nio.charset.Charset;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -40,12 +38,14 @@ public class S3Downloader {
   AmazonS3Client s3client;
   ThreadPoolExecutor threadPool;
   S3CopyOptions options;
+  Progressable progress;
 
-  public S3Downloader(Configuration conf, S3CopyOptions options) {
+  public S3Downloader(Configuration conf, S3CopyOptions options, Progressable progress) {
     this.conf = conf;
     this.s3client = S3Utils.createAmazonS3Client(conf);
     this.threadPool = Utils.createDefaultExecutorService();
     this.options = options;
+    this.progress = progress;
   }
 
   public void setOptions(S3CopyOptions options) {
@@ -182,22 +182,26 @@ public class S3Downloader {
         // The object reaches certain size limit that makes multi-part download beneficial.
         log.info(String.format("object %s/%s size = %d, use multi-part download",
                                   bucket, key, metadata.getContentLength()));
-        if (multipartDownload(s3client, bucket, key, metadata, destFilename, verifyChecksum)) {
-          return true;
-        }
-        /*String interimDirname = "/tmp/" + UUID.randomUUID();
-        try {
-          if (!FileUtils.createLocalDir(interimDirname)) {
-            log.info("failed to create interim dir: " + interimDirname);
-            return false;
+        if (this.options.useInterimFiles) {
+          // via interim files:  chunks are saved to local disks, then concatenate
+          // to hdfs.
+          String interimDirname = "/tmp/" + UUID.randomUUID();
+          try {
+            if (!FileUtils.createLocalDir(interimDirname)) {
+              log.info("failed to create interim dir: " + interimDirname);
+            } else if (multipartDownloadViaInterimFiles(s3client, bucket, key, metadata,
+                                                    destFilename, verifyChecksum, interimDirname)) {
+              return true;
+            }
+          } finally {
+            FileUtils.deleteLocalDir(interimDirname);
           }
-          if (multipartDownloadViaInterimFiles(s3client, bucket, key, metadata,
-                                                  destFilename, verifyChecksum, interimDirname)) {
+        } else {
+          //// No use interim files
+          if (multipartDownload(s3client, bucket, key, metadata, destFilename, verifyChecksum)) {
             return true;
           }
-        } finally {
-          FileUtils.deleteLocalDir(interimDirname);
-        }*/
+        }
       } else {
         // A regular-sized object.  Can download in one request.
         log.info(String.format("object %s/%s size = %d, downloaded in one object",
@@ -222,7 +226,6 @@ public class S3Downloader {
         return s3Object;
       } catch (AmazonServiceException ase) {
         log.info("ServiceException: " + S3Utils.AWSServiceExceptionToString(ase));
-        //log.info("ServiceException: ", ase);
       } catch (AmazonClientException ace) {
         log.info("ClientException: " + ace.getMessage());
       }
@@ -398,11 +401,11 @@ public class S3Downloader {
     long partSize = this.options.chunkSize; //1024L * 1024 * 32;
     long objectSize = metadata.getContentLength();
     long numberOfParts = (objectSize + partSize - 1) / partSize;
-    long maxInflightParts = 30;
+    long maxInflightParts = 1;
     MessageDigest md = null;
     log.info(String.format("will multipart download %s/%s at chunk size %d, total %d bytes" +
-                               " to dest : %s",
-                              bucket, key, partSize, objectSize, destFilename));
+                               " in %d parts to dest : %s",
+                              bucket, key, partSize, objectSize, numberOfParts, destFilename));
     try {
       md = MessageDigest.getInstance("MD5");
     } catch (NoSuchAlgorithmException e) {
@@ -413,7 +416,8 @@ public class S3Downloader {
     long bytesCopied = 0;
     OutputStream destOutStream = null;
     if (destFilename != null) {
-      destOutStream = FileUtils.openHDFSOutputStream(destFilename, this.conf);
+      destOutStream = FileUtils.openHDFSOutputStreamWithProgress(destFilename, this.conf,
+                                                                    this.progress);
       if (destOutStream == null) {
         log.info("Unable to open dest file: " + destFilename);
         return false;
@@ -424,8 +428,8 @@ public class S3Downloader {
     while (finishedParts < numberOfParts) {
       if (currentOffset < objectSize && inflightParts.size() < maxInflightParts) {
         endOffset = Math.min(currentOffset + partSize, objectSize) - 1;
-        log.info(String.format("will get range [%d - %d] out of total %d",
-                                  currentOffset, endOffset, objectSize));
+        log.info(String.format("will get part %d range [%d - %d]/%d for %s, no interim file",
+                                  partNumber, currentOffset, endOffset, objectSize, key));
         inflightParts.add(this.threadPool.submit(new MultipartDownloadCallable(s3client,
                                                                                   bucket,
                                                                                   key,
@@ -449,7 +453,9 @@ public class S3Downloader {
             partFailed = true;
             break;
           } else {
-            long len = FileUtils.copyStream(r.object.getObjectContent(), destOutStream, md);
+            long len = FileUtils.copyStream(r.object.getObjectContent(),
+                                               destOutStream,
+                                               md);
             r.object.getObjectContent().close();
             if (len == (r.end - r.begin + 1)) {
               bytesCopied += len;
@@ -493,16 +499,16 @@ public class S3Downloader {
         log.info(String.format("download %s/%s success and checksum success", bucket, key));
       }
     }
+    try {
+      if (destOutStream != null) {
+        destOutStream.close();
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
     if (!ret) {
       log.info(String.format("download %s/%s failed, delete dest file %s",
                                 bucket, key, destFilename));
-      try {
-        if (destOutStream != null) {
-          destOutStream.close();
-        }
-      } catch (IOException e) {
-        e.printStackTrace();
-      }
       FileUtils.deleteHDFSDir(destFilename, this.conf);
     }
     return ret;
@@ -543,14 +549,12 @@ public class S3Downloader {
     long endOffset;
     long finishedParts = 0;
     long partNumber = 0;
-    long partSize = 1024L * 1024 * 32;
+    long partSize = 1024L * 1024 * 16;
     long objectSize = metadata.getContentLength();
     long numberOfParts = (objectSize + partSize - 1) / partSize;
 
     while (currentOffset < objectSize) {
       endOffset = Math.min(currentOffset + partSize, objectSize) - 1;
-      log.info(String.format("will get range [%d - %d] out of total %d",
-                                currentOffset, endOffset, objectSize));
       String tempfilename = interimDirname + "/" + String.format("multipart-down-%04d", partNumber);
       inflightParts.add(this.threadPool.submit(new MultipartDownloadCallable(s3client,
                                                                                 bucket,
@@ -559,6 +563,9 @@ public class S3Downloader {
                                                                                 endOffset,
                                                                                 partNumber,
                                                                                 tempfilename)));
+      log.info(String.format("will get part %d range [%d - %d] / %d for %s, interim file %s",
+                                partNumber, currentOffset, endOffset,
+                                objectSize, key, tempfilename));
       partNumber++;
       currentOffset = endOffset + 1;
     }
@@ -615,8 +622,9 @@ public class S3Downloader {
       retry++;
       bytesCopied = 0;
       try {
-        if (destFilename.length() > 0) {
-          destOutStream = FileUtils.openHDFSOutputStream(destFilename, this.conf);
+        if (destFilename != null && destFilename.length() > 0) {
+          destOutStream = FileUtils.openHDFSOutputStreamWithProgress(destFilename, this.conf,
+                                                                        this.progress);
           if (destOutStream == null) {
             continue;
           }
@@ -639,19 +647,39 @@ public class S3Downloader {
         e.printStackTrace();
       }
     }
-    actualDigest = new String(Base64.encodeBase64(md.digest()), Charset.forName("UTF-8"));
-    if (bytesCopied == objectSize) {
-      if (!verifyChecksum || expectedDigest.equals(actualDigest)) {
-        log.info(String.format("download %s/%s succeeded: %d out of %d parts",
-                                  bucket, key, finishedParts, numberOfParts));
-        return true;
-      } else {
-          log.info(String.format("download %s/%s checksum mismatch",bucket, key));
-          return false;
+    if (destOutStream != null) {
+      try {
+        destOutStream.close();
+      } catch (IOException e) {
+        e.printStackTrace();
       }
     }
-    log.info(String.format("download %s/%s failed", bucket, key));
-    return false;
+    boolean ret = false;
+    actualDigest = new String(Base64.encodeBase64(md.digest()), Charset.forName("UTF-8"));
+    if (bytesCopied != objectSize) {
+      log.info(String.format("download %s/%s failed: copied %d of %d",
+                                bucket, key, bytesCopied, objectSize));
+    } else if (verifyChecksum) {
+      if (expectedDigest.equals(actualDigest)) {
+        log.info(String.format("download %s/%s success and checksum success, copied %d bytes, " +
+                                   "%d out of %d parts",
+                                  bucket, key, bytesCopied, finishedParts, numberOfParts));
+        ret = true;
+      } else {
+        log.info(String.format("download %s/%s checksum mismatch",bucket, key));
+      }
+    } else {
+      log.info(String.format("download %s/%s success no checksum, copied %d bytes, " +
+                                 "%d out of %d parts",
+                                bucket, key, bytesCopied, finishedParts, numberOfParts));
+      ret = true;
+    }
+    if (!ret) {
+      log.info(String.format("download %s/%s failed, delete dest file %s",
+                                bucket, key, destFilename));
+      FileUtils.deleteHDFSDir(destFilename, this.conf);
+    }
+    return ret;
   }
 
   private void cancelMultipartRequest(List<Future<RangeGetResult>> parts) {
@@ -664,10 +692,20 @@ public class S3Downloader {
                                        OutputStream hdfsOutStream,
                                        MessageDigest md) {
     InputStream ins = FileUtils.openLocalInputStream(localFilename);
-    if (ins != null) {
-      return FileUtils.copyStream(ins, hdfsOutStream, md);
-    } else {
-      return -1;
+    try {
+      if (ins != null) {
+        return FileUtils.copyStream(ins, hdfsOutStream, md);
+      } else {
+        return -1;
+      }
+    } finally {
+      if (ins != null) {
+        try {
+          ins.close();
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+      }
     }
   }
 
@@ -748,10 +786,6 @@ public class S3Downloader {
     public RangeGetResult call() {
       RangeGetResult result = new RangeGetResult(this.begin, this.end, this.partNumber,
                                                     this.interimFilename);
-      log.info(String.format("multipart get file %s: part %d [%d-%d] via interim file (%s)",
-                                this.s3key, this.partNumber,
-                                this.begin, this.end,
-                                this.interimFilename == null ? "null" : this.interimFilename));
       result.success = false;
       GetObjectRequest request = new GetObjectRequest(s3bucket, s3key);
       request.setRange(this.begin, this.end);
@@ -785,7 +819,8 @@ public class S3Downloader {
                                     this.end, this.interimFilename, retry));
           return result;
         } catch (IOException e) {
-          log.info("error downloading part: " + toString());
+          log.info("error saving part to interim file: " + toString()
+                       + " :: " + this.interimFilename);
         } finally {
           try {
             if (outs != null) outs.close();

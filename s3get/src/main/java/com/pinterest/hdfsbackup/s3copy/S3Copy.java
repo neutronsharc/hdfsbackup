@@ -86,10 +86,10 @@ public class S3Copy extends Configured implements Tool {
     FileOutputFormat.setOutputPath(job, redOutputDirPath);
 
     job.setOutputKeyClass(Text.class);
-    job.setOutputValueClass(FilePairInfo.class);
+    job.setOutputValueClass(FilePair.class);
 
-    job.setMapperClass(S3CopyMapper.class);
-    job.setReducerClass(S3CopyReducer.class);
+    job.setMapperClass(S3GetMapper.class);
+    job.setReducerClass(S3GetReducer.class);
 
     try {
       log.info("before MR job...");

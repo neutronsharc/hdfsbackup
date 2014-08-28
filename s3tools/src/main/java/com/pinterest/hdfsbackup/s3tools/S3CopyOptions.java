@@ -29,6 +29,9 @@ public class S3CopyOptions {
   public int queueSize = 100;
   public int workerThreads = 10;
   public long chunkSize = 1024L * 1024 * 32;
+  public boolean useInterimFiles = false;
+  // a ',' separated list of dirs to use as interim stage area for multi-part ops.
+  public String interimDirs = "";
 
   public S3CopyOptions() { }
 
@@ -38,15 +41,20 @@ public class S3CopyOptions {
    */
   public void populateFromConfiguration(Configuration conf) {
     // Each reducer has a queue to store file pairs to process.
-    this.queueSize = conf.getInt("s3copy.queuesize", 100);
+    this.queueSize = conf.getInt("s3copy.queueSize", 100);
     // Each reducer spawns this many worker threads.
-    this.workerThreads = conf.getInt("s3copy.workerthreads", 10);
-    // If use multipart or not.
+    this.workerThreads = conf.getInt("s3copy.workerThreads", 10);
+    // If use multipart or not. It's hardwired to always be true. Don't overwrite it.
     this.useMultipart = conf.getBoolean("s3copy.multipart", true);
     // Multipart chunk size.
-    this.chunkSize = conf.getInt("s3copy.chunksizemb", 32) * 1024L * 1024;
+    this.chunkSize = conf.getInt("s3copy.chunkSizeMB", 16) * 1024L * 1024;
     // Whether to verify checksum during transmit.
     this.verifyChecksum = conf.getBoolean("s3copy.checksum", true);
+    // During multi-part download, you can choose to put intermediate chunks
+    // in a temp dir before re-assemble them to final file, such that
+    // in-flight parts can complete out of order.
+    // This is usually faster than waiting for parts to complete in order.
+    this.useInterimFiles = conf.getBoolean("s3copy.useInterimFiles", false);
   }
 
   public void showCopyOptions() {
@@ -58,7 +66,8 @@ public class S3CopyOptions {
       .append(String.format("\tverify checksum:         %s\n", this.verifyChecksum))
       .append(String.format("\tmultipart chunk size:    %d\n", this.chunkSize))
       .append(String.format("\tqueue size:              %d\n", this.queueSize))
-      .append(String.format("\tworker threads per task: %d\n", this.workerThreads));
+      .append(String.format("\tworker threads per task: %d\n", this.workerThreads))
+      .append(String.format("\tuse interim files:       %s\n", this.useInterimFiles));
     log.info(sb.toString());
   }
 

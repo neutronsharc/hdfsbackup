@@ -8,6 +8,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.SequenceFile;
+import org.apache.hadoop.util.Progressable;
 
 import java.io.*;
 import java.net.URI;
@@ -20,6 +21,7 @@ import java.util.Map;
 public class FileUtils {
   static final Log log = LogFactory.getLog(FileUtils.class);
   //private static Configuration conf = null;
+  static long iopos = 0;
 
   public static FSType getFSType(String filename) {
     Path path = new Path(filename);
@@ -77,6 +79,29 @@ public class FileUtils {
   }
 
   /**
+   * Open a HDFS file to write to.  Overwrite if the file already exists.
+   * @param filename
+   * @return
+   */
+  public static OutputStream openHDFSOutputStreamWithProgress(String filename,
+                                                              Configuration conf,
+                                                              Progressable progress) {
+    OutputStream ostream = null;
+    boolean overwrite = true;
+    try {
+      Path outputFilePath = new Path(filename);
+      FileSystem outputFs = outputFilePath.getFileSystem(conf);
+      ostream = outputFs.create(outputFilePath, progress);
+    } catch (IOException e) {
+      log.info("failed to open output file " + filename, e);
+      ostream = null;
+    } finally {
+    }
+    return ostream;
+  }
+
+
+  /**
    * Create a HDFS dir.
    * @param dirName
    * @return
@@ -127,10 +152,10 @@ public class FileUtils {
         return null;
       }
       fin = new FileInputStream(file);
-      log.info("opened file " + filename + ", avail bytes = " + fin.available());
+      log.info("opened local file " + filename + ", avail bytes = " + fin.available());
       return fin;
     } catch (FileNotFoundException e) {
-      log.info("error input file: not exist: " + filename);
+      log.info("error local input file: not exist: " + filename);
       e.printStackTrace();
     } catch (IOException e) {
       e.printStackTrace();
@@ -226,6 +251,42 @@ public class FileUtils {
   }
 
   /**
+   * Copy from input stream to output stream.  Update the digest if provided.
+   * @param ins
+   * @param outs
+   * @param md
+   * @return  number of bytes actually copied.  -1 if error occurs during copy.
+   */
+  public static long copyStreamProgress(InputStream ins,
+                                OutputStream outs,
+                                MessageDigest md,
+                                Progressable progress) {
+    long copiedBytes = 0;
+    byte[] buffer = new byte[1024 * 1024];
+    int len = 0;
+    try {
+      while ((len = ins.read(buffer)) > 0) {
+        if (outs != null) {
+          outs.write(buffer, 0, len);
+        }
+        FileUtils.iopos += len;
+        progress.progress();
+        if (md != null) {
+          md.update(buffer, 0, len);
+        }
+        copiedBytes += len;
+      }
+      log.info("copied  " + copiedBytes +
+                   " from input to output, end offset = " + FileUtils.iopos);
+    } catch (IOException e) {
+      e.printStackTrace();
+      return -1;
+    }
+    return copiedBytes;
+  }
+
+
+  /**
    * Compute a HDFS file's checksum.
    * @param ins
    * @param md
@@ -274,7 +335,7 @@ public class FileUtils {
                                             conf,
                                             pairFilePath,
                                             LongWritable.class,
-                                            FilePairInfo.class,
+                                            FilePair.class,
                                             SequenceFile.CompressionType.NONE);
     } catch (IOException e) {
       e.printStackTrace();
@@ -284,8 +345,8 @@ public class FileUtils {
     try {
       for (Map.Entry<String, DirEntry> e : srcFileListing.dirEntries.entrySet()) {
         DirEntry dirEntry = e.getValue();
-        FilePairInfo pair =
-            new FilePairInfo(dirEntry.baseDirname + "/" + dirEntry.entryName,
+        FilePair pair =
+            new FilePair(dirEntry.baseDirname + "/" + dirEntry.entryName,
                              destDirname == null ? "" : destDirname + dirEntry.entryName,
                              false,
                              0);
@@ -295,8 +356,8 @@ public class FileUtils {
       }
       for (Map.Entry<String, DirEntry> e : srcFileListing.fileEntries.entrySet()) {
         DirEntry fileEntry = e.getValue();
-        FilePairInfo pair =
-            new FilePairInfo(fileEntry.baseDirname + "/" + fileEntry.entryName,
+        FilePair pair =
+            new FilePair(fileEntry.baseDirname + "/" + fileEntry.entryName,
                                 destDirname == null ? "" : destDirname + fileEntry.entryName,
                                 true,
                                 fileEntry.fileSize);
