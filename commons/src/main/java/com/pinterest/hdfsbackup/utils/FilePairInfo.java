@@ -59,4 +59,10 @@ public class FilePairInfo implements Writable {
     }
   }
 
+  public FilePairInfo clone() {
+    return new FilePairInfo(this.srcFile.toString(),
+                            this.destFile.toString(),
+                            this.isFile.get(),
+                            this.fileSize.get());
+  }
 }

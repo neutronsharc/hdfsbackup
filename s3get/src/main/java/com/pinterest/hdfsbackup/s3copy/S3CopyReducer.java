@@ -32,9 +32,9 @@ public class S3CopyReducer implements Reducer<Text, FilePairInfo, Text, FilePair
 
   @Override
   public void close() throws IOException {
-    log.info("has posted " + count + " file pairs, wait for completion...");
+    log.info("has posted " + this.count + " file pairs, wait for completion...");
     this.executor.close();
-    log.info("has processed " + count + " file pairs");
+    log.info("has processed " + this.count + " file pairs");
     synchronized (this) {
       if (this.unfinishedFiles.size() > 0) {
         log.info(String.format("Error: %d files failed to copy ::",
@@ -69,13 +69,16 @@ public class S3CopyReducer implements Reducer<Text, FilePairInfo, Text, FilePair
                      Reporter reporter) throws IOException {
     this.reporter = reporter;
     this.collector = collector;
+    int countLocal = 0;
     while (iterator.hasNext()) {
-      FilePairInfo pair = (FilePairInfo) iterator.next();
-      log.info(String.format("get filepair %s: [%s]", text.toString(), pair.toString()));
-      count++;
+      FilePairInfo pair = ((FilePairInfo)iterator.next()).clone();
+      log.info(String.format("Reducer get filepair %s: %s", text.toString(), pair.toString()));
+      countLocal++;
       addUnfinishedFile(pair);
       this.executor.execute(new S3GetFileRunnable(pair, this));
     }
+    log.info("posted " + countLocal + " files in one reduce round.");
+    this.count += countLocal;
   }
 
   public boolean addUnfinishedFile(FilePairInfo pair) {
