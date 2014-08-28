@@ -76,9 +76,6 @@ public class S3Downloader {
         destFilename = destDirname + "/" + srcEntry.entryName;
       }
     }
-
-    long expectedSize = srcEntry.fileSize;
-
     // get bucket and key of the object.
     Path srcPath = new Path(srcFilename);
     URI srcUri = srcPath.toUri();
@@ -91,6 +88,10 @@ public class S3Downloader {
   }
 
   public boolean DownloadFile(String srcFilename, String destFilename, boolean verifyChecksum) {
+    // src entry is an empty dir,  only needs to create a dir.
+    if (destFilename != null && destFilename.endsWith("/")) {
+      return FileUtils.createHDFSDir(destFilename, this.conf);
+    }
     // get bucket and key of the object.
     Path srcPath = new Path(srcFilename);
     URI srcUri = srcPath.toUri();
@@ -440,24 +441,33 @@ public class S3Downloader {
       if (part.isDone()) {
         inflightParts.remove(0);
         finishedParts++;
+        RangeGetResult r = null;
         try {
-          RangeGetResult r = part.get();
+          r = part.get();
           partResults.add(r);
           if (!r.success) {
             partFailed = true;
             break;
           } else {
             long len = FileUtils.copyStream(r.object.getObjectContent(), destOutStream, md);
+            r.object.getObjectContent().close();
             if (len == (r.end - r.begin + 1)) {
               bytesCopied += len;
               log.info(String.format("got obj %s/%s: range [%d, %d]", bucket, key, r.begin, r.end));
             } else {
               log.info(String.format("fail to obj %s/%s: range [%d, %d]",
                                         bucket, key, r.begin, r.end));
+              partFailed = true;
+              break;
             }
           }
         } catch (Exception e) {
           e.printStackTrace();
+          try {
+            if (r != null && r.object != null && r.object.getObjectContent() != null) {
+              r.object.getObjectContent().close();
+            }
+          } catch (IOException exp) {}
           partFailed = true;
           break;
         }
@@ -738,6 +748,10 @@ public class S3Downloader {
     public RangeGetResult call() {
       RangeGetResult result = new RangeGetResult(this.begin, this.end, this.partNumber,
                                                     this.interimFilename);
+      log.info(String.format("multipart get file %s: part %d [%d-%d] via interim file (%s)",
+                                this.s3key, this.partNumber,
+                                this.begin, this.end,
+                                this.interimFilename == null ? "null" : this.interimFilename));
       result.success = false;
       GetObjectRequest request = new GetObjectRequest(s3bucket, s3key);
       request.setRange(this.begin, this.end);

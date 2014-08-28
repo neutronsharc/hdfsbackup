@@ -15,13 +15,13 @@ public class S3GetFileRunnable implements Runnable {
   FilePairInfo filePair;
   S3CopyOptions options;
 
-  S3GetFileRunnable(FilePairInfo filePair, S3CopyReducer reducer) {
+  public S3GetFileRunnable(FilePairInfo filePair, S3CopyReducer reducer) {
     this.s3CopyReducer = reducer;
     this.filePair = filePair;
     this.options = reducer.options;
   }
 
-  S3GetFileRunnable(FilePairInfo filePair, S3CopyReducer reducer, S3CopyOptions options) {
+  public S3GetFileRunnable(FilePairInfo filePair, S3CopyReducer reducer, S3CopyOptions options) {
     this.s3CopyReducer = reducer;
     this.filePair = filePair;
     this.options = options;
@@ -29,7 +29,7 @@ public class S3GetFileRunnable implements Runnable {
 
   @Override
   public void run() {
-    log.info("start processing file pair: " + this.filePair.toString());
+    log.info("Runnable start processing file pair: " + this.filePair.toString());
     S3Downloader s3Downloader = new S3Downloader(this.s3CopyReducer.getConf(), this.options);
     String destFilename = this.filePair.destFile.toString();
     boolean ret = s3Downloader.DownloadFile(this.filePair.srcFile.toString(),

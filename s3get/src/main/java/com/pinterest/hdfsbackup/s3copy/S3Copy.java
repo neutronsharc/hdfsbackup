@@ -1,7 +1,6 @@
 package com.pinterest.hdfsbackup.s3copy;
 
 import com.pinterest.hdfsbackup.s3tools.S3CopyOptions;
-import com.pinterest.hdfsbackup.s3tools.S3Downloader;
 import com.pinterest.hdfsbackup.utils.*;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -12,7 +11,6 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.*;
 import org.apache.hadoop.util.Tool;
 
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -43,7 +41,7 @@ public class S3Copy extends Configured implements Tool {
       return 1;
     }
 
-    // A special case: only download one S3 file.
+/*    // A special case: only download one S3 file.
     if (srcFileList.getFileEntryCount() == 1) {
       S3Downloader s3Downloader = new S3Downloader(this.conf, options);
       for (Map.Entry<String, DirEntry> e : srcFileList.getFileEntries()) {
@@ -55,7 +53,7 @@ public class S3Copy extends Configured implements Tool {
           return 1;
         }
       }
-    }
+    }*/
 
     // TODO(shawn@): support local file.
     FSType destType = FileUtils.getFSType(options.destPath);

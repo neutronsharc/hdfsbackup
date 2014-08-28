@@ -210,11 +210,11 @@ public class FileUtils {
     int len = 0;
     try {
       while ((len = ins.read(buffer)) > 0) {
-        if (md != null) {
-          md.update(buffer, 0, len);
-        }
         if (outs != null) {
           outs.write(buffer, 0, len);
+        }
+        if (md != null) {
+          md.update(buffer, 0, len);
         }
         copiedBytes += len;
       }
