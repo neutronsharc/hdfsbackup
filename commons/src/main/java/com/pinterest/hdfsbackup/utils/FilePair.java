@@ -12,7 +12,7 @@ import java.io.IOException;
 /**
  * Created by shawn on 8/26/14.
  */
-public class FilePair implements Writable {
+public class FilePair implements Writable, Comparable<FilePair> {
   public Text srcFile;
   public Text destFile;
   public BooleanWritable isFile;
@@ -64,5 +64,17 @@ public class FilePair implements Writable {
                             this.destFile.toString(),
                             this.isFile.get(),
                             this.fileSize.get());
+  }
+
+  @Override
+  public int compareTo(FilePair filePair) {
+    // bigger files are at the front of the result.
+    if (this.fileSize.get() > filePair.fileSize.get()) {
+      return -1;
+    } else if (this.fileSize.get() == filePair.fileSize.get()) {
+      return 0;
+    } else {
+      return -1;
+    }
   }
 }

@@ -28,6 +28,7 @@ public class S3CopyOptions {
   public boolean useMultipart = true;
   public int queueSize = 100;
   public int workerThreads = 10;
+  public int maxInflightParts = 1;
   public long chunkSize = 1024L * 1024 * 32;
   public boolean useInterimFiles = false;
   // a ',' separated list of dirs to use as interim stage area for multi-part ops.
@@ -49,6 +50,8 @@ public class S3CopyOptions {
     // Multipart chunk size. This size should match with the multi-part upload
     // chunk size for better performance.
     this.chunkSize = conf.getInt("s3copy.chunkSizeMB", 16) * 1024L * 1024;
+    // Issue this many multi-part request on the wire.
+    this.maxInflightParts = conf.getInt("s3copy.maxInflightParts", 1);
     // Whether to verify checksum during transmit.
     this.verifyChecksum = conf.getBoolean("s3copy.checksum", true);
     // During multi-part download, you can choose to put intermediate chunks
@@ -68,7 +71,9 @@ public class S3CopyOptions {
       .append(String.format("\tmultipart chunk size:    %d\n", this.chunkSize))
       .append(String.format("\tqueue size:              %d\n", this.queueSize))
       .append(String.format("\tworker threads per task: %d\n", this.workerThreads))
+      .append(String.format("\tmax inflight parts:      %d\n", this.maxInflightParts))
       .append(String.format("\tuse interim files:       %s\n", this.useInterimFiles));
+
     log.info(sb.toString());
   }
 

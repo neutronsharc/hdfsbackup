@@ -35,12 +35,18 @@ public class S3Copy extends Configured implements Tool {
       srcFileList.dump();
     }
 
+    int numberMappers = Integer.parseInt(this.conf.get("mapred.map.tasks"));
+    FilePairPartition partition = new FilePairPartition(numberMappers);
+    if (partition.createFileGroups(srcFileList, options.destPath)) {
+      partition.display();
+      return 0;
+    }
+
     FSType srcType = FileUtils.getFSType(options.srcPath);
     if (srcType != FSType.S3) {
       log.info("source dir must be S3.");
       return 1;
     }
-
 /*    // A special case: only download one S3 file.
     if (srcFileList.getFileEntryCount() == 1) {
       S3Downloader s3Downloader = new S3Downloader(this.conf, options);
