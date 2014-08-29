@@ -1,0 +1,27 @@
+todo:
+
+1. multipart download using 1 inflight parts
+
+2. multipart down, via temp local files, 1 inflight parts
+
+3. same as 2, with 10 inflight parts
+
+--------
+how to run:
+time hadoop jar ./s3get-0.1.jar -Ds3copy.chunkSizeMB=16  -Dmapred.reduce.tasks=200
+-Dmapred.map.tasks=1 -Ds3copy.checksum=true
+--src s3n://pinterest-namenode-backup/test/fromhdfs/bighbase-with-checksum/
+--dest /user/shawn/froms3/bighbase2
+
+
+------------
+test dir (2781 GB):
+original copy at hdfs:    /hbasebackups/hbasemetann001e/link_pin_index_v1/2014-08-22-06-51-16/
+
+multipart upload to s3:  s3n://pinterest-namenode-backup/test/fromhdfs/bighbase-with-checksum/
+
+downloaded from s3 to hdfs:   /user/shawn/froms3/bighbase2/
+
+---------
+another test dir at s3:  1 GB
+    s3n://pinterest-namenode-backup/test/tos3dir/
