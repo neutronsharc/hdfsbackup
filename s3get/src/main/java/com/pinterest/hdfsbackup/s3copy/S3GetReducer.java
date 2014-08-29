@@ -23,18 +23,20 @@ import java.util.Set;
 public class S3GetReducer implements Reducer<Text, FilePair, Text, FilePair> {
   private static final Log log = LogFactory.getLog(S3GetReducer.class);
   private  JobConf conf;
-  private long count = 0;
+  private long fileCount = 0;
   private SimpleExecutor executor;
   public Reporter reporter;
   OutputCollector<Text, FilePair> collector;
   S3CopyOptions options;
   Set<FilePair> unfinishedFiles;
+  public long bytesToCopy = 0;
 
   @Override
   public void close() throws IOException {
-    log.info("has posted " + this.count + " file pairs, wait for completion...");
+    log.info(String.format("has posted %d files %d bytes, wait for completion...",
+                              this.fileCount, this.bytesToCopy));
     this.executor.close();
-    log.info("has processed " + this.count + " file pairs");
+    log.info("has processed " + this.fileCount + " file pairs");
     synchronized (this) {
       if (this.unfinishedFiles.size() > 0) {
         log.info(String.format("Error: %d files failed to copy ::",
@@ -79,11 +81,12 @@ public class S3GetReducer implements Reducer<Text, FilePair, Text, FilePair> {
       FilePair pair = ((FilePair)iterator.next()).clone();
       log.info(String.format("Reducer get filepair %s: %s", text.toString(), pair.toString()));
       countLocal++;
+      this.bytesToCopy += pair.fileSize.get();
       addUnfinishedFile(pair);
       this.executor.execute(new S3GetFileRunnable(pair, this));
     }
     log.info("posted " + countLocal + " files in one reduce round.");
-    this.count += countLocal;
+    this.fileCount += countLocal;
   }
 
   public boolean addUnfinishedFile(FilePair pair) {

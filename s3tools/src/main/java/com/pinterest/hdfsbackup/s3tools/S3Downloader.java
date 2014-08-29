@@ -87,14 +87,15 @@ public class S3Downloader {
     return DownloadFile(bucket, key, destFilename, verifyChecksum);
   }
 
+  /**
+   * NOTE: caller should make sure the src filename is not a directory.
+   *
+   * @param srcFilename
+   * @param destFilename
+   * @param verifyChecksum
+   * @return
+   */
   public boolean DownloadFile(String srcFilename, String destFilename, boolean verifyChecksum) {
-    if (srcFilename.endsWith("/")) {
-      // src entry is an empty dir,  only needs to create a dest dir.
-      if (destFilename != null && destFilename.endsWith("/")) {
-        return FileUtils.createHDFSDir(destFilename, this.conf);
-      }
-      return true;
-    }
     // get bucket and key of the object.
     Path srcPath = new Path(srcFilename);
     URI srcUri = srcPath.toUri();
@@ -106,38 +107,39 @@ public class S3Downloader {
     return DownloadFile(bucket, key, destFilename, verifyChecksum);
   }
 
+  /**
+   * Download a S3 object identified by "bucket/key".
+   *
+   * @param bucket
+   * @param key
+   * @param destFilename
+   * @param verifyChecksum
+   * @return
+   */
   public boolean DownloadFile(String bucket,
                               String key,
                               String destFilename,
                               boolean verifyChecksum) {
-    if (this.s3client != null) {
-      return DownloadFile(this.s3client, bucket, key, destFilename, verifyChecksum);
-    } else {
+    if (this.s3client == null) {
       log.info("Error: S3Client not initialized");
       return false;
     }
-  }
-
-  /**
-   * Download a S3 object "bucket/key" to the destFilename.
-   * @param s3client
-   * @param bucket
-   * @param key
-   * @param destFilename
-   * @return
-   */
-  public boolean DownloadFile(AmazonS3Client s3client,
-                              String bucket,
-                              String key,
-                              String destFilename,
-                              boolean verifyChecksum) {
-    ObjectMetadata metadata = S3Utils.getObjectMetadata(s3client, bucket, key);
+    ObjectMetadata metadata = S3Utils.getObjectMetadata(this.s3client, bucket, key);
     if (metadata == null) {
       log.error("fail to get object metadat : " + bucket + "/" + key);
       return false;
     }
+    Map<String, String> userMetadata = metadata.getUserMetadata();
+    if (userMetadata.containsKey("ContentLength".toLowerCase())) {
+      long userProvidedLen = Long.valueOf(userMetadata.get("ContentLength".toLowerCase()));
+      if (metadata.getContentLength() != userProvidedLen) {
+        log.info(String.format("user-provided size %d != system size %d",
+                                  userProvidedLen, metadata.getContentLength()));
+        return false;
+      }
+    }
     long startTimeMs = System.currentTimeMillis();
-    boolean ret = DownloadFile(s3client, bucket, key, metadata, destFilename, verifyChecksum);
+    boolean ret = DownloadFile(this.s3client, bucket, key, metadata, destFilename, verifyChecksum);
     long endTimeMs = System.currentTimeMillis();
     double bw = metadata.getContentLength() / 1000.0 / (endTimeMs - startTimeMs);
     log.info(String.format("download %d bytes, costs %d ms, bandwidth = %f MB/s",
@@ -145,6 +147,16 @@ public class S3Downloader {
     return ret;
   }
 
+  /**
+   *
+   * @param s3client
+   * @param bucket
+   * @param key
+   * @param metadata
+   * @param destFilename
+   * @param verifyChecksum
+   * @return  true or false.
+   */
   public boolean DownloadFile(AmazonS3Client s3client,
                               String bucket,
                               String key,
@@ -166,9 +178,9 @@ public class S3Downloader {
         return false;
       }
     }
-    int maxRetry = 3;
+    int maxRetry = 10;
     int retry = 0;
-
+    long expectedBytes = metadata.getContentLength();
     while (retry < maxRetry) {
       retry++;
       if (metadata.getContentLength() == 0) {
@@ -182,9 +194,9 @@ public class S3Downloader {
           } catch (IOException e) {}
           return true;
         }
-      } else if (metadata.getContentLength() >= 1024 * 1024 * 4) {
-        // The object reaches certain size limit that
-        // makes multi-part download beneficial.
+      }
+      // The object reaches certain size, use multi-part download.
+      else if (metadata.getContentLength() >= 1024 * 1024 * 4) {
         log.info(String.format("object %s/%s size = %d, use multi-part download",
                                   bucket, key, metadata.getContentLength()));
         if (this.options.useInterimFiles) {
@@ -193,64 +205,104 @@ public class S3Downloader {
           try {
             if (!FileUtils.createLocalDir(interimDirname)) {
               log.info("failed to create interim dir: " + interimDirname);
-            } else if (multipartDownloadViaInterimFiles(s3client, bucket, key, metadata,
-                                                    destFilename, verifyChecksum, interimDirname)) {
-              return true;
+            } else {
+              if (multipartDownloadViaInterimFiles(s3client, bucket, key, metadata,
+                                                   destFilename, verifyChecksum, interimDirname)
+                  &&
+                  (destFilename == null ||
+                       FileUtils.getHDFSFileSize(destFilename,this.conf) == expectedBytes)) {
+                return true;
+              }
+              if (destFilename != null) {
+                FileUtils.deleteHDFSDir(destFilename, this.conf);
+              }
             }
           } finally {
             FileUtils.deleteLocalDir(interimDirname);
           }
         } else {
-          //// No use interim files
-          if (multipartDownload(s3client, bucket, key, metadata, destFilename, verifyChecksum)) {
+          //// Not use interim files
+          if (multipartDownload(s3client, bucket, key, metadata, destFilename, verifyChecksum)
+              &&
+              (destFilename == null ||
+                   FileUtils.getHDFSFileSize(destFilename,this.conf) == expectedBytes)) {
             return true;
           }
+          if (destFilename != null) {
+            FileUtils.deleteHDFSDir(destFilename, this.conf);
+          }
         }
-      } else {
-        // A regular-sized object.  Can download in one request.
+      }
+      // A regular-sized object.  Can download in one request.
+      else {
         log.info(String.format("object %s/%s size = %d, downloaded in one object",
                                   bucket, key, metadata.getContentLength()));
-        if (DownloadAsOneObject(s3client, bucket, key, metadata, destFilename, verifyChecksum)) {
+        if (DownloadAsOneObject(s3client, bucket, key, metadata, destFilename, verifyChecksum)
+            &&
+            (destFilename == null ||
+                 FileUtils.getHDFSFileSize(destFilename, this.conf) == expectedBytes)) {
           return true;
+        }
+        if (destFilename != null) {
+          FileUtils.deleteHDFSDir(destFilename, this.conf);
         }
       }
     }
-
+    log.info(String.format("after retry %d: failed to download %s/%s to %s",
+                              retry, bucket, key, destFilename));
     return false;
   }
 
+  /**
+   * Download S3 object range given in the request.
+   * @param s3client
+   * @param request
+   * @return
+   */
   private S3Object downloadS3Object(AmazonS3Client s3client,
                                     GetObjectRequest request) {
     int retry = 0;
-    int maxRetry = 10;
+    int maxRetry = 30;
     while (retry < maxRetry) {
       retry++;
       try {
         S3Object s3Object = s3client.getObject(request);
         return s3Object;
       } catch (AmazonServiceException ase) {
-        log.info("ServiceException: " + S3Utils.AWSServiceExceptionToString(ase));
+        log.error("Server error when download S3 object:\nServiceException: "
+                     + S3Utils.AWSServiceExceptionToString(ase));
       } catch (AmazonClientException ace) {
-        log.info("ClientException: " + ace.getMessage());
+        log.error("Client error when downloading S3 object:\nClientException: "
+                     + ace.getMessage());
       }
     }
-    log.info(String.format("Error: failed to download S3 file %s/%s",
+    log.error(String.format("Error: failed to download S3 file %s/%s",
                                 request.getBucketName(), request.getKey()));
     return null;
   }
 
+  /**
+   * Download an S3 object in a single request, without multi-part ops.
+   *
+   * @param s3client
+   * @param bucket
+   * @param key
+   * @param metadata
+   * @param destFilename
+   * @param verifyChecksum
+   * @return
+   */
   private boolean DownloadAsOneObject(AmazonS3Client s3client,
                                       String bucket,
                                       String key,
                                       ObjectMetadata metadata,
                                       String destFilename,
                                       boolean verifyChecksum) {
-    S3Object s3Object = null;
-    boolean result = false;
+    S3Object s3Object;
     int maxRetry = 1;
-    int retry = 0;
+    int retry;
     // Step 1:  download the s3 object
-    s3Object = downloadS3Object(this.s3client, new GetObjectRequest(bucket, key));
+    s3Object = downloadS3Object(s3client, new GetObjectRequest(bucket, key));
     if (s3Object == null) {
       return false;
     }
@@ -361,10 +413,11 @@ public class S3Downloader {
   }
 
   /**
-   * Download a S3 object.
+   * Download a S3 object using multi-part download.
+   *
    * If "destFilename" is provided, the object will be saved to this destination.
    * Otherwise, the object is downloaded but not saved anywhere.
-   * This is useful to compute checksum.
+   * This is useful to verify checksum.
    *
    * @param s3client
    * @param bucket
@@ -465,7 +518,8 @@ public class S3Downloader {
             r.object.getObjectContent().close();
             if (len == (r.end - r.begin + 1)) {
               bytesCopied += len;
-              log.info(String.format("got obj %s/%s: range [%d, %d]", bucket, key, r.begin, r.end));
+              //log.info(String.format("got obj %s/%s: range [%d, %d]", bucket, key, r.begin,
+              //                           r.end));
             } else {
               log.info(String.format("fail to obj %s/%s: range [%d, %d]",
                                         bucket, key, r.begin, r.end));
@@ -490,6 +544,13 @@ public class S3Downloader {
         } catch (InterruptedException e) {}
       }
     }
+    try {
+      if (destOutStream != null) {
+        destOutStream.close();
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
     boolean ret = true;
     if (partFailed || bytesCopied != objectSize) {
       cancelMultipartRequest(inflightParts);
@@ -504,13 +565,6 @@ public class S3Downloader {
       } else {
         log.info(String.format("download %s/%s success and checksum success", bucket, key));
       }
-    }
-    try {
-      if (destOutStream != null) {
-        destOutStream.close();
-      }
-    } catch (IOException e) {
-      e.printStackTrace();
     }
     if (!ret) {
       log.info(String.format("download %s/%s failed, delete dest file %s",
