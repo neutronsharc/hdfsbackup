@@ -69,6 +69,9 @@ public class DirWalker {
     ObjectListing objects = null;
     boolean finished = false;
 
+    if (baseDirname.endsWith("/")) {
+      baseDirname = baseDirname.substring(0, baseDirname.length() - 1);
+    }
     FileListingInDir fileListing = new FileListingInDir(baseDirname);
 
     // prefix is the object key's prefix, excluding bucket name.
@@ -177,6 +180,9 @@ public class DirWalker {
   public FileListingInDir walkHDFSDir(String baseDirname) {
     FileListingInDir fileListing = new FileListingInDir(baseDirname);
     Path dirPath = new Path(baseDirname);
+    if (baseDirname.endsWith("/")) {
+      baseDirname = baseDirname.substring(0, baseDirname.length() - 1);
+    }
 
     Path curPath = dirPath;
     try {

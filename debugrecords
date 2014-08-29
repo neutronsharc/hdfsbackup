@@ -1,3 +1,11 @@
+
+======================
+debug record:
+
+problem 1. when download large dirs (2781GB), one 20 MB file sees missing data in last chunk.
+  changed "max inflight part" to 1 and the problem is gone.
+
+last of portion miss
 todo:
 
 1. multipart download using 1 inflight parts
@@ -5,6 +13,8 @@ todo:
 2. multipart down, via temp local files, 1 inflight parts
 
 3. same as 2, with 10 inflight parts
+
+
 
 --------
 how to run:

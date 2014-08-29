@@ -48,10 +48,6 @@ public class S3Downloader {
     this.progress = progress;
   }
 
-  public void setOptions(S3CopyOptions options) {
-    this.options = options;
-  }
-
   public void close() {
     for (Runnable runnable : this.threadPool.shutdownNow()) {
     }
@@ -178,7 +174,7 @@ public class S3Downloader {
         return false;
       }
     }
-    int maxRetry = 10;
+    int maxRetry = 5;
     int retry = 0;
     long expectedBytes = metadata.getContentLength();
     while (retry < maxRetry) {
@@ -262,7 +258,7 @@ public class S3Downloader {
   private S3Object downloadS3Object(AmazonS3Client s3client,
                                     GetObjectRequest request) {
     int retry = 0;
-    int maxRetry = 30;
+    int maxRetry = 10;
     while (retry < maxRetry) {
       retry++;
       try {
@@ -319,7 +315,7 @@ public class S3Downloader {
     }
 
     S3Object s3Object;
-    int maxRetry = 10;
+    int maxRetry = 5;
     int retry = 0;
     long bytesCopied = 0;
 
@@ -462,7 +458,7 @@ public class S3Downloader {
     long partSize = this.options.chunkSize; //1024L * 1024 * 32;
     long objectSize = metadata.getContentLength();
     long numberOfParts = (objectSize + partSize - 1) / partSize;
-    long maxInflightParts = 1;
+    long maxInflightParts = this.options.maxInflightParts;
     MessageDigest md = null;
     log.info(String.format("will multipart download %s/%s at chunk size %d, total %d bytes" +
                                " in %d parts to dest : %s",
@@ -489,8 +485,10 @@ public class S3Downloader {
     while (finishedParts < numberOfParts) {
       if (currentOffset < objectSize && inflightParts.size() < maxInflightParts) {
         endOffset = Math.min(currentOffset + partSize, objectSize) - 1;
-        log.info(String.format("will get part %d range [%d - %d] / %d for %s, no interim file",
-                                  partNumber, currentOffset, endOffset, objectSize, key));
+        log.info(String.format("have %d inflight-parts, rqst part %d range [%d - %d] / %d " +
+                                   "for %s, no interim file",
+                                  inflightParts.size(), partNumber,
+                                  currentOffset, endOffset, objectSize, key));
         inflightParts.add(this.threadPool.submit(new MultipartDownloadCallable(s3client,
                                                                                   bucket,
                                                                                   key,
@@ -555,6 +553,7 @@ public class S3Downloader {
     boolean ret = true;
     if (partFailed || bytesCopied != objectSize) {
       cancelMultipartRequest(inflightParts);
+      // TODO: add a counter about the failure.
       log.info(String.format("download %s/%s failed, got bytes %d of %d",
                                 bucket, key, bytesCopied, objectSize));
       ret = false;
