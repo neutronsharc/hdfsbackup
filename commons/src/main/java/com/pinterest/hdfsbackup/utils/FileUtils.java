@@ -4,6 +4,7 @@ package com.pinterest.hdfsbackup.utils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.LongWritable;
@@ -100,6 +101,23 @@ public class FileUtils {
     return ostream;
   }
 
+  public static long getHDFSFileSize(String filename, Configuration conf) {
+    try {
+      Path filePath = new Path(filename);
+      FileSystem fs = filePath.getFileSystem(conf);
+      if (!fs.exists(filePath)) {
+        return -1;
+      }
+      FileStatus status = fs.getFileStatus(filePath);
+      if (status.isDir()) {
+        return -1;
+      }
+      return status.getLen();
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+    return -1;
+  }
 
   /**
    * Create a HDFS dir.
