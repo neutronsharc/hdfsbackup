@@ -298,28 +298,17 @@ public class S3Downloader {
                                       ObjectMetadata metadata,
                                       String destFilename,
                                       boolean verifyChecksum) {
-    S3Object s3Object;
-    int maxRetry = 1;
-    int retry;
-    // Step 1:  download the s3 object
-    s3Object = downloadS3Object(s3client, new GetObjectRequest(bucket, key));
-    if (s3Object == null) {
-      return false;
-    }
-
-    // Step 2:  copy the S3 object to buffer, and verify checksum
+    // Exam if checksum exists.
     Map<String, String> userMetadata = metadata.getUserMetadata();
     boolean hasChecksum = true;
     String expectedDigest = "";
     String actualDigest = "";
-    long bytesCopied = 0;
-
     if (userMetadata.containsKey("ContentMD5".toLowerCase())) {
       expectedDigest = userMetadata.get("ContentMD5".toLowerCase());
       log.info(String.format("S3 obj %s/%s user-provide md5 = %s", bucket, key, expectedDigest));
     } else if (metadata.getContentMD5() != null) {
       expectedDigest = metadata.getContentMD5();
-      log.info(String.format("S3 obj %s/%s system md5 = %s", bucket, key, expectedDigest));
+      log.info(String.format("S3 obj %s/%s uses system-md5 = %s", bucket, key, expectedDigest));
     } else {
       hasChecksum = false;
       log.info(String.format("S3 obj %s/%s has no MD5 checksum", bucket, key));
@@ -328,6 +317,18 @@ public class S3Downloader {
         return false;
       }
     }
+
+    S3Object s3Object;
+    int maxRetry = 10;
+    int retry = 0;
+    long bytesCopied = 0;
+
+    // Step 1:  download the s3 object
+    s3Object = downloadS3Object(s3client, new GetObjectRequest(bucket, key));
+    if (s3Object == null) {
+      return false;
+    }
+    // Step 2:  copy the S3 object to buffer, and verify checksum
     //DigestInputStream s3DigestInput = null;
     InputStream s3ins = s3Object.getObjectContent();
     ByteArrayOutputStream bOutput = new ByteArrayOutputStream((int)(metadata.getContentLength()));
