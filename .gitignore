@@ -1,6 +1,7 @@
+# files excluded from git.
 *.class
-
-# Package Files #
 *.jar
 *.war
 *.ear
+target/
+.idea/
