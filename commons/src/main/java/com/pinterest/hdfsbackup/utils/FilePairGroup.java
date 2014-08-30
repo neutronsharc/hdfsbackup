@@ -56,8 +56,9 @@ public class FilePairGroup implements Comparable<FilePairGroup> {
    * @param filename
    * @return
    */
-  public boolean writeToFile(String filename, Configuration conf) {
-    Path filePath = new Path(filename);
+  public boolean writeToFile(Path filePath, Configuration conf) {
+    //Path filePath = new Path(filename);
+    log.info("will write to file: " + filePath.toString());
     SequenceFile.Writer writer;
     try {
       FileSystem fs = filePath.getFileSystem(conf);
@@ -69,7 +70,7 @@ public class FilePairGroup implements Comparable<FilePairGroup> {
                                          FilePair.class,
                                          SequenceFile.CompressionType.NONE);
     } catch (IOException e) {
-      log.info("fail to open group file: " + filename);
+      log.info("fail to open group file: " + filePath.toString());
       e.printStackTrace();
       return false;
     }
@@ -83,7 +84,7 @@ public class FilePairGroup implements Comparable<FilePairGroup> {
       }
       return true;
     } catch (IOException e) {
-      log.info("failed to write file pair to group file: " + filename);
+      log.info("failed to write file pair to group file: " + filePath.toString());
     } finally {
       try {
         writer.close();
@@ -119,7 +120,7 @@ public class FilePairGroup implements Comparable<FilePairGroup> {
     sb.append(String.format("file group %d: %d files, %d dirs, total %d bytes",
                                this.groupID, this.fileCount, this.dirCount, this.totalFileSize));
     for (FilePair pair : this.filePairs) {
-      //sb.append("\n" + pair.toString());
+      sb.append("\n" + pair.toString());
     }
     return sb.toString();
   }

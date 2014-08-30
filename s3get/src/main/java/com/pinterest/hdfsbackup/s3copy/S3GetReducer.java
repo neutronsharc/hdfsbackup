@@ -83,7 +83,7 @@ public class S3GetReducer implements Reducer<Text, FilePair, Text, FilePair> {
       countLocal++;
       this.bytesToCopy += pair.fileSize.get();
       addUnfinishedFile(pair);
-      this.executor.execute(new S3GetFileRunnable(pair, this));
+      //this.executor.execute(new S3GetFileRunnable(pair, this));
     }
     log.info("posted " + countLocal + " files in one reduce round.");
     this.fileCount += countLocal;
