@@ -72,13 +72,6 @@ public class S3Copy extends Configured implements Tool {
     Path redOutputDirPath = new Path(tempDirRoot, "red-output");
     log.info("Use tmp dir: " + tempDirRoot);
 
-    /*if (!FileUtils.createFilePairInfoFile(srcFileList, options.destPath, filePairPath,
-                                              getConf())) {
-      log.info("failed to create file pair " + filePairPath.toString());
-      FileUtils.deleteHDFSDir(tempDirRoot, this.conf);
-      return 1;
-    }*/
-
     try {
       JobConf job = new JobConf(getConf(), S3Copy.class);
 

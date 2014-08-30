@@ -33,7 +33,7 @@ public class S3CopyOptions {
   public boolean useInterimFiles = false;
   // a ',' separated list of dirs to use as interim stage area for multi-part ops.
   public String interimDirs = "";
-
+  public String manifestFilename = null;
   public S3CopyOptions() { }
 
   /**
@@ -84,6 +84,8 @@ public class S3CopyOptions {
     SimpleOption verbose = options.noArg("--verbose", "be verbose");
     OptionWithArg srcOption = options.withArg("--src", "Source directory");
     OptionWithArg destOption = options.withArg("--dest", "Dest directory");
+    OptionWithArg manifestFilenameOption = options.withArg("--manifest",
+                                                           "a file containing all files to copy");
 
     options.parseArguments(args);
     if (helpOption.defined()) {
@@ -97,12 +99,18 @@ public class S3CopyOptions {
     }
     if (srcOption.defined()) {
       srcPath = srcOption.getValue();
+      if (srcPath.endsWith("/")) {
+        srcPath = srcPath.substring(0, srcPath.length() - 1);
+      }
     }
     if (destOption.defined()) {
       destPath = destOption.getValue();
       if (destPath.endsWith("/")) {
         destPath = destPath.substring(0, destPath.length() - 1);
       }
+    }
+    if (manifestFilenameOption.defined()) {
+      this.manifestFilename = manifestFilenameOption.getValue();
     }
   }
 
