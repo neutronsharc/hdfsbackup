@@ -51,7 +51,7 @@ public class S3CopyOptions {
     // chunk size for better performance.
     this.chunkSize = conf.getInt("s3copy.chunkSizeMB", 16) * 1024L * 1024;
     // Issue this many multi-part request on the wire.
-    this.maxInflightParts = conf.getInt("s3copy.maxInflightParts", 1);
+    this.maxInflightParts = conf.getInt("s3copy.maxInflightParts", 2);
     // Whether to verify checksum during transmit.
     this.verifyChecksum = conf.getBoolean("s3copy.checksum", true);
     // During multi-part download, you can choose to put intermediate chunks
