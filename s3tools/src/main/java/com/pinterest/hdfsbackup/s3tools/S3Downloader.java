@@ -39,6 +39,8 @@ public class S3Downloader {
   ThreadPoolExecutor threadPool;
   S3CopyOptions options;
   Progressable progress;
+  // md5 checksum of the last downloaded file.
+  String lastMD5Checksum = "";
 
   public S3Downloader(Configuration conf, S3CopyOptions options, Progressable progress) {
     this.conf = conf;
@@ -52,6 +54,10 @@ public class S3Downloader {
     for (Runnable runnable : this.threadPool.shutdownNow()) {
     }
     this.s3client.shutdown();
+  }
+
+  public String getLastMD5Checksum() {
+    return this.lastMD5Checksum;
   }
 
   /**
@@ -307,7 +313,7 @@ public class S3Downloader {
       log.info(String.format("S3 obj %s/%s uses system-md5 = %s", bucket, key, expectedDigest));
     } else {
       hasChecksum = false;
-      log.info(String.format("S3 obj %s/%s has no MD5 checksum", bucket, key));
+      log.info(String.format("S3 obj %s/%s has no existing MD5 checksum", bucket, key));
       if (verifyChecksum) {
         log.info(String.format("need checksum but S3 obj %s/%s has no checksum", bucket, key));
         return false;
@@ -341,7 +347,6 @@ public class S3Downloader {
       try {
         if (bOutput != null) bOutput.close();
         if (s3ins != null) s3ins.close();
-        log.info("close digest input...");
       } catch (Exception e) {
       }
     }
@@ -351,8 +356,9 @@ public class S3Downloader {
                                 bucket, key, bytesCopied, metadata.getContentLength()));
       return false;
     }
+    actualDigest = new String(Base64.encodeBase64(md.digest()), Charset.forName("UTF-8"));
+    this.lastMD5Checksum = actualDigest;
     if (verifyChecksum && hasChecksum) {
-      actualDigest = new String(Base64.encodeBase64(md.digest()), Charset.forName("UTF-8"));
       if (expectedDigest.equals(actualDigest)) {
         log.info(String.format("download s3obj %s/%s checksum matched: %s",
                                   bucket, key, expectedDigest));
@@ -393,7 +399,7 @@ public class S3Downloader {
           log.info(String.format("Error: download %s/%s size %d: " +
                                     "only saved %d bytes to dest %s ",
                            bucket, key, metadata.getContentLength(), bytesCopied, destFilename));
-          return false;
+          // falls through, will retry multiple times.
         }
       } catch (Exception e) {
         log.info(String.format("download s3obj attempt %d: %s/%s: error copy byte %d",
@@ -437,12 +443,13 @@ public class S3Downloader {
     String actualDigest = "";
     if (userMetadata.containsKey("ContentMD5".toLowerCase())) {
       expectedDigest = userMetadata.get("ContentMD5".toLowerCase());
-      log.info(String.format("S3 obj %s/%s user-provide md5 = %s", bucket, key, expectedDigest));
+      log.info(String.format("S3 obj %s/%s uses user-provide md5 = %s",
+                                bucket, key, expectedDigest));
     } else if (metadata.getContentMD5() != null) {
       expectedDigest = metadata.getContentMD5();
-      log.info(String.format("S3 obj %s/%s system md5 = %s", bucket, key, expectedDigest));
+      log.info(String.format("S3 obj %s/%s uses system md5 = %s", bucket, key, expectedDigest));
     } else {
-      log.info(String.format("S3 obj %s/%s has no MD5 checksum", bucket, key));
+      log.info(String.format("S3 obj %s/%s has no existing MD5 checksum", bucket, key));
       if (verifyChecksum) {
         log.info(String.format("need checksum but S3 obj %s/%s has no checksum", bucket, key));
         return false;
@@ -551,6 +558,8 @@ public class S3Downloader {
       e.printStackTrace();
     }
     boolean ret = true;
+    actualDigest = new String(Base64.encodeBase64(md.digest()), Charset.forName("UTF-8"));
+    this.lastMD5Checksum = actualDigest;
     if (partFailed || bytesCopied != objectSize) {
       cancelMultipartRequest(inflightParts);
       // TODO: add a counter about the failure.
@@ -558,7 +567,6 @@ public class S3Downloader {
                                 bucket, key, bytesCopied, objectSize));
       ret = false;
     } else if (verifyChecksum) {
-      actualDigest = new String(Base64.encodeBase64(md.digest()), Charset.forName("UTF-8"));
       if (!actualDigest.equals(expectedDigest)) {
         log.info(String.format("download %s/%s: checksum mismatch", bucket, key));
         ret = false;
@@ -593,7 +601,7 @@ public class S3Downloader {
       expectedDigest = metadata.getContentMD5();
       log.info(String.format("S3 obj %s/%s system md5 = %s", bucket, key, expectedDigest));
     } else {
-      log.info(String.format("S3 obj %s/%s has no MD5 checksum", bucket, key));
+      log.info(String.format("S3 obj %s/%s has no existing MD5 checksum", bucket, key));
       if (verifyChecksum) {
         log.info(String.format("need checksum but S3 obj %s/%s has no checksum", bucket, key));
         return false;
@@ -633,17 +641,15 @@ public class S3Downloader {
     while (finishedParts < numberOfParts) {
       boolean anyPartDone = false;
       try {
-        while (!anyPartDone) {
-          for (int i = 0; i < inflightParts.size(); i++) {
-            Future<RangeGetResult> part = inflightParts.get(i);
-            if (part.isDone()) {
-              this.progress.progress();
-              anyPartDone = true;
-              inflightParts.remove(i);
-              partResults.add(part.get());
-              finishedParts++;
-              break;
-            }
+        for (int i = 0; i < inflightParts.size(); i++) {
+          Future<RangeGetResult> part = inflightParts.get(i);
+          if (part.isDone()) {
+            this.progress.progress();
+            anyPartDone = true;
+            inflightParts.remove(i);
+            partResults.add(part.get());
+            finishedParts++;
+            break;
           }
         }
         if (!anyPartDone) {
@@ -717,6 +723,7 @@ public class S3Downloader {
     }
     boolean ret = false;
     actualDigest = new String(Base64.encodeBase64(md.digest()), Charset.forName("UTF-8"));
+    this.lastMD5Checksum = actualDigest;
     if (bytesCopied != objectSize) {
       log.info(String.format("download %s/%s failed: copied %d of %d",
                                 bucket, key, bytesCopied, objectSize));

@@ -268,6 +268,52 @@ public class FileUtils {
     return copiedBytes;
   }
 
+  public static boolean computeHDFSDigest(String hdfsFilename,
+                                          Configuration conf,
+                                          MessageDigest md) {
+
+    InputStream ins = FileUtils.openHDFSInputStream(hdfsFilename, conf);
+    if (ins == null) {
+      return false;
+    }
+    byte[] buffer = new byte[1024 * 1024];
+    int retry = 0;
+    int maxRetry = 5;
+    while (retry < maxRetry) {
+      retry++;
+      try {
+        Path filePath = new Path(hdfsFilename);
+        FileSystem fs = filePath.getFileSystem(conf);
+        long fileSize = fs.getContentSummary(filePath).getLength();
+        log.info(String.format("will compute checksum for file %s: size %d",
+                                  hdfsFilename, fileSize));
+        int len = 0;
+        long bytesRead = 0;
+        while ((len = ins.read(buffer)) > 0) {
+          md.update(buffer, 0, len);
+          bytesRead += len;
+        }
+        if (bytesRead != fileSize) {
+          log.info(String.format("Error: file %s: read bytes %d, file size %d",
+                                  hdfsFilename, bytesRead, filePath));
+          return false;
+        }
+        log.info(String.format("hdfs file checksum success: %s", hdfsFilename));
+        return true;
+      } catch (Exception e) {
+        e.printStackTrace();
+      } finally {
+        try {
+          ins.close();
+        } catch (IOException e) {
+          log.info("error when reading hdfs for checksum: " + hdfsFilename);
+          e.printStackTrace();
+        }
+      }
+    }
+    return false;
+  }
+
   /**
    * Copy from input stream to output stream.  Update the digest if provided.
    * @param ins

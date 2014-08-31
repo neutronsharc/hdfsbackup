@@ -7,12 +7,20 @@ problem 1. when download large dirs (2781GB), one 20 MB file sees missing data i
 
 last of portion miss
 todo:
-
 1. multipart download using 1 inflight parts
 
 2. multipart down, via temp local files, 1 inflight parts
 
 3. same as 2, with 10 inflight parts
+  =>  problem fixed.
+
+
+2.
+two files seem to fail checksum check:
+2014-08-31 04:09:51,583 INFO
+com.amazon.external.elasticmapreduce.s3distcp.CompareFilesRunnable: compare checksum mismatch:
+/hbasebackups/hbasegraphnn001e/node_edge_messages/2014-08-29-06-23-24/.archive/node_edge_messages/2de3072034a5b5428df562a946a2aed2/d/c4010ab1c6a1471a817e6c24cddddbb2
+s3n://pinterest-namenode-backup/test/fromhdfs/midhbase-with-checksum/.archive/node_edge_messages/2de3072034a5b5428df562a946a2aed2/d/c4010ab1c6a1471a817e6c24cddddbb2
 
 
 
@@ -81,3 +89,5 @@ public class S3GetMapper
     this.conf = entries;
   }
 }
+
+

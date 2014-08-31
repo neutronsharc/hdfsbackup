@@ -14,6 +14,7 @@
         <module>s3tools</module>
         <module>test</module>
         <module>s3get</module>
+        <module>compare-file-checksum</module>
     </modules>
 
     <dependencies>
@@ -21,7 +22,7 @@
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-core</artifactId>
-            <!-- <scope>provided</scope> -->
+            <scope>provided</scope>
             <version>1.0.3</version>
         </dependency>
 

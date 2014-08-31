@@ -34,6 +34,7 @@ public class S3CopyOptions {
   // a ',' separated list of dirs to use as interim stage area for multi-part ops.
   public String interimDirs = "";
   public String manifestFilename = null;
+
   public S3CopyOptions() { }
 
   /**
