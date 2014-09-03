@@ -62,7 +62,7 @@ public class FilePairPartition {
         log.info(String.format("failed to write group %d to file %s", group.groupID, filename));
         return false;
       }
-      log.info(String.format("write group %d to file %s", group.groupID, filename));
+      log.debug(String.format("write group %d to file %s", group.groupID, filename));
     }
     return true;
   }

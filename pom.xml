@@ -13,8 +13,9 @@
         <module>commons</module>
         <module>s3tools</module>
         <module>test</module>
-        <module>s3get</module>
-        <module>compare-file-checksum</module>
+        <module>s3copy</module>
+        <module>compare-file</module>
+        <module>compare-dir</module>
     </modules>
 
     <dependencies>

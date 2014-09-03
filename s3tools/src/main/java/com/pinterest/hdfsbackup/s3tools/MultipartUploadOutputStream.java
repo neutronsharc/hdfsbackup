@@ -112,7 +112,7 @@ public class MultipartUploadOutputStream extends OutputStream {
       this.currentOutput =
           new DigestOutputStream(new BufferedOutputStream(new FileOutputStream(this.currentTemp)),
                                     MessageDigest.getInstance("MD5"));
-      log.info(String.format("use temp file %s for chunk %d",
+      log.debug(String.format("use temp file %s for chunk %d",
                                 this.currentTemp.getName(), this.partCount));
     } catch (IOException e) {
       throw new RuntimeException("Error creating temporary output stream.", e);
@@ -198,7 +198,7 @@ public class MultipartUploadOutputStream extends OutputStream {
       for (Future future : this.futures) {
         etags.add(future.get());
       }
-      log.info(String.format("Will close multipart upload: %s/%s, with %d etags",
+      log.debug(String.format("Will close multipart upload: %s/%s, with %d etags",
                                 this.bucketName, this.key, etags.size()));
       this.s3.completeMultipartUpload(new CompleteMultipartUploadRequest(this.bucketName,
                                                                          this.key,

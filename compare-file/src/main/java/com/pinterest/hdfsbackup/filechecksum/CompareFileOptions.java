@@ -9,8 +9,8 @@ import com.pinterest.hdfsbackup.options.SimpleOption;
 /**
  * Created by shawn on 8/30/14.
  */
-public class CompareFileChecksumOptions {
-  private static final Log log = LogFactory.getLog(CompareFileChecksumOptions.class);
+public class CompareFileOptions {
+  private static final Log log = LogFactory.getLog(CompareFileOptions.class);
   // Below options are provided at cmd line through "--opt=value"
   public String srcPath = null;
   public String destPath = null;
@@ -19,13 +19,13 @@ public class CompareFileChecksumOptions {
 
   public void showOptions() {
     StringBuilder sb = new StringBuilder();
-    sb.append("S3Copy options: \n")
+    sb.append("Compare file options: \n")
         .append("\tsource: " + this.srcPath + "\n")
         .append("\ttarget: " + this.destPath + "\n");
     log.info(sb.toString());
   }
 
-  public CompareFileChecksumOptions(String args[]) {
+  public CompareFileOptions(String args[]) {
     Options options = new Options();
 
     SimpleOption helpOption = options.noArg("--help", "Print help text");

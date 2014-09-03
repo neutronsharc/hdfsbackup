@@ -34,7 +34,7 @@ public class FilePairGroup implements Comparable<FilePairGroup> {
     this.dirCount = 0;
     this.totalFileSize = 0;
     this.emptyFileCount = 0;
-    log.info("create file group " + groupID);
+    log.debug("create file group " + groupID);
   }
 
   public void add(FilePair pair) {
@@ -58,7 +58,7 @@ public class FilePairGroup implements Comparable<FilePairGroup> {
    */
   public boolean writeToFile(Path filePath, Configuration conf) {
     //Path filePath = new Path(filename);
-    log.info("will write to file: " + filePath.toString());
+    log.debug("will write to file: " + filePath.toString());
     SequenceFile.Writer writer;
     try {
       FileSystem fs = filePath.getFileSystem(conf);

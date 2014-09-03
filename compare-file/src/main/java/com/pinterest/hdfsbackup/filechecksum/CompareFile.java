@@ -16,12 +16,12 @@ import java.security.MessageDigest;
 /**
  * Created by shawn on 8/30/14.
  */
-public class CompareFileChecksum {
-  private static final Log log = LogFactory.getLog(CompareFileChecksum.class);
+public class CompareFile {
+  private static final Log log = LogFactory.getLog(CompareFile.class);
 
 
   public static void main(String args[]) {
-    CompareFileChecksumOptions options = new CompareFileChecksumOptions(args);
+    CompareFileOptions options = new CompareFileOptions(args);
     if (options.helpDefined) {
       return;
     }

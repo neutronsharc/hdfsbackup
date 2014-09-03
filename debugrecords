@@ -16,7 +16,11 @@ another test dir at s3:  1 GB
     s3n://pinterest-namenode-backup/test/tos3dir/
 
 
+155 GB:
 
+/hbasebackups/hbaseusermetann001e/board_interests/2014-08-29-09-20-47
+
+s3n://pinterest-namenode-backup/test/fromhdfs/midhbase-with-checksum/
 
 ======================
 debug record:

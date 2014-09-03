@@ -73,6 +73,10 @@ public class S3Copy extends Configured implements Tool {
       }
     }
 
+    // NOTE: if src is S3 and dest is null, we can still download the S3 files and verify its
+    // content against the md5 checksum in s3 obj metadata.  The downloaded objs are
+    // not really saved anywhere though.
+
     // TODO(shawn@): support local file.
     FSType destType = FileUtils.getFSType(options.destPath);
     boolean toS3 = false;
