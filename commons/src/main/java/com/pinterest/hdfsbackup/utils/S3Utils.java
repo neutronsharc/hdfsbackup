@@ -8,10 +8,15 @@ import com.amazonaws.auth.InstanceProfileCredentialsProvider;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.GetObjectMetadataRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.PutObjectResult;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.net.URI;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -94,5 +99,38 @@ public class S3Utils {
   public static boolean isS3Scheme(String scheme)
   {
     return (scheme.equals("s3")) || (scheme.equals("s3n"));
+  }
+
+  public static boolean createS3Directory(String dirname, Configuration conf) {
+    AmazonS3Client s3Client = S3Utils.createAmazonS3Client(conf);
+    ObjectMetadata metadata = new ObjectMetadata();
+    metadata.setContentLength(0);
+    Path path = new Path(dirname);
+    URI dirUri = path.toUri();
+    String bucket = dirUri.getHost();
+    String key = dirUri.getPath();
+    if (key.startsWith("/")) {
+      key = key.substring(1);
+    }
+    if (!key.endsWith("/")) {
+      key = key + "/";
+    }
+    int retry = 0;
+    int maxRetry = 5;
+    while (retry < maxRetry) {
+      retry++;
+      try {
+        InputStream emptyContent = new ByteArrayInputStream(new byte[0]);
+        PutObjectResult result = s3Client.putObject(bucket, key, emptyContent, metadata);
+        log.info(String.format("Have created S3 directory %s/%s", bucket, key));
+        return true;
+      } catch (AmazonServiceException ase) {
+        log.info("Server error: " + S3Utils.AWSServiceExceptionToString(ase));
+      } catch (AmazonClientException ace) {
+        log.info("Client error: " + ace.toString());
+      }
+    }
+    log.info(String.format("Failed to create S3 directory %s/%s", bucket, key));
+    return false;
   }
 }

@@ -34,11 +34,14 @@ public class DirWalker {
 
   public FileListingInDir walkDir(String baseDirname) {
     FileListingInDir fileListing = null;
-    Path baseDirPath = new Path(baseDirname);
-    if (baseDirname.startsWith("s3://") || baseDirname.startsWith("s3n://")) {
+    FSType fsType = FileUtils.getFSType(baseDirname);
+    if (fsType == FSType.S3) {
       fileListing = walkS3Dir(baseDirname);
-    } else {
+    } else if (fsType == FSType.HDFS) {
       fileListing = walkHDFSDir(baseDirname);
+    } else {
+      log.info("unknown fs type: " + baseDirname);
+      return null;
     }
     log.info(fileListing.toString());
     return fileListing;
@@ -96,13 +99,15 @@ public class DirWalker {
       log.info(String.format("request to path: %s,  bucket = %s, prefix = %s",
                                 baseDirname, baseUri.getHost(), prefix));
       int retryCount = 0;
-      while (retryCount < 10) {
+      int maxRetry = 3;
+      while (retryCount < maxRetry) {
         retryCount++;
         try {
           objects = s3Client.listObjects(listObjectRequest);
+          break;
         } catch (AmazonClientException e) {
           retryCount++;
-          if (retryCount > 10) {
+          if (retryCount >= maxRetry) {
             log.info("Failed to list objects: " + e.getMessage());
             throw e;
           }
@@ -187,14 +192,27 @@ public class DirWalker {
     Path curPath = dirPath;
     try {
       log.info("will walk HDFS dir: " + baseDirname + "\n");
-      FileSystem fs = dirPath.getFileSystem(conf);
+      FileSystem fs = dirPath.getFileSystem(this.conf);
+      // Special case: the base dirname is a file itself.
+      FileStatus sta = fs.getFileStatus(dirPath);
+      if (!sta.isDir()) {
+        log.info(baseDirname + " is a file...");
+        int splitIdx = baseDirname.lastIndexOf('/');
+        DirEntry fileEntry = new DirEntry(baseDirname.substring(0, splitIdx),
+                                          baseDirname.substring(splitIdx + 1, baseDirname.length()),
+                                          true,
+                                          sta.getLen());
+        fileListing.addEntry(fileEntry);
+        return fileListing;
+      }
+
       Queue pathsToVisit = new ArrayDeque();
       pathsToVisit.add(dirPath);
       while (pathsToVisit.size() > 0) {
         curPath = (Path) pathsToVisit.remove();
         FileStatus[] statuses = fs.listStatus(curPath);
         if (statuses.length == 0) {
-          // NOTE: HDFS doesn't add tailing "/" to an empty dir name.
+          // NOTE: HDFS doesn't add trailing "/" to an empty dir name.
           fileListing.addEntry(new DirEntry(baseDirname,
                                             getSuffix(curPath.toString() + "/", baseDirname),
                                             false, 0));

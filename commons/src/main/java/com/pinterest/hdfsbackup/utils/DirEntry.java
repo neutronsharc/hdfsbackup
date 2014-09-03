@@ -4,7 +4,8 @@ package com.pinterest.hdfsbackup.utils;
  * Created by shawn on 8/25/14.
  */
 public class DirEntry {
-  // the base dir name in the form of:  "<scheme>://<hose or bucket>/<parent dir>"
+  // the base dir name in the form of:  "<scheme>://<host or bucket>/<parent dir>",
+  // without the tailing '/'.
   public String baseDirname;
   // entryName is the obj name in the base dir.
   // File entry  "<sub dir>/objectname", without the leading '/'.

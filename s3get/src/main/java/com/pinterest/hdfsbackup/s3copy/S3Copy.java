@@ -2,6 +2,7 @@ package com.pinterest.hdfsbackup.s3copy;
 
 import com.pinterest.hdfsbackup.s3tools.S3CopyOptions;
 import com.pinterest.hdfsbackup.s3tools.S3Downloader;
+import com.pinterest.hdfsbackup.s3tools.S3Uploader;
 import com.pinterest.hdfsbackup.utils.*;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -36,32 +37,53 @@ public class S3Copy extends Configured implements Tool {
     FileListingInDir srcFileList = dirWalker.walkDir(options.srcPath);
 
     FSType srcType = FileUtils.getFSType(options.srcPath);
-    if (srcType != FSType.S3) {
-      log.info("source dir must be S3.");
-      return 1;
-    }
-    // A special case: only download one S3 object.
+    // A special case: only download / upload one S3 object.
     if (srcFileList.getFileEntryCount() == 1) {
-      S3Downloader s3Downloader = new S3Downloader(this.conf, options, new Progressable() {
-        public void progress() {}});
+      S3Downloader s3Downloader = null;
+      S3Uploader s3Uploader = null;
       for (Map.Entry<String, DirEntry> e : srcFileList.getFileEntries()) {
         DirEntry srcEntry = e.getValue();
         if (!srcEntry.isFile) {
           log.info("source object is a dir: " + e.toString());
           return 0;
         }
-        if (s3Downloader.DownloadFile(srcEntry, options.destPath, options.verifyChecksum)) {
-          return 0;
-        } else {
-          return 1;
+        try {
+          Progressable progressable = new Progressable() {public void progress() {}};
+          if (srcType == FSType.S3) {
+            // Copy from S3 to HDFs.
+            s3Downloader = new S3Downloader(this.conf, options, progressable);
+            if (s3Downloader.DownloadFile(srcEntry, options.destPath, options.verifyChecksum)) {
+              return 0;
+            } else {
+              return 1;
+            }
+          } else {
+            // copy from HDFS to S3
+            s3Uploader = new S3Uploader(this.conf, options, progressable);
+            if (s3Uploader.uploadFile(srcEntry, options.destPath)) {
+              return 0;
+            } else {
+              return 1;
+            }
+          }
+        } finally {
+          if (s3Downloader != null) s3Downloader.close();
+          if (s3Uploader != null) s3Uploader.close();
         }
       }
     }
 
     // TODO(shawn@): support local file.
-    if (options.destPath != null) {
-      FSType destType = FileUtils.getFSType(options.destPath);
-      assert (destType == FSType.HDFS);
+    FSType destType = FileUtils.getFSType(options.destPath);
+    boolean toS3 = false;
+    if (srcType == FSType.S3 && destType == FSType.HDFS) {
+      log.info("from S3 to HDFS");
+    } else if (srcType == FSType.HDFS && destType == FSType.S3) {
+      log.info("from HDFS to S3");
+      toS3 = true;
+    } else {
+      log.info("unsupported transmission");
+      return 1;
     }
 
     // need to copy from src to dest dir.
@@ -87,7 +109,7 @@ public class S3Copy extends Configured implements Tool {
       }
 
       // set up options
-      job.setJobName(String.format("S3Get  %s => %s,  %s checksum",
+      job.setJobName(String.format("S3Copy  %s => %s,  %s checksum",
                                       options.srcPath, options.destPath,
                                       options.verifyChecksum ? "with" : "no"));
       job.setInputFormat(SequenceFileInputFormat.class);
@@ -99,7 +121,11 @@ public class S3Copy extends Configured implements Tool {
       job.setOutputKeyClass(Text.class);
       job.setOutputValueClass(FilePair.class);
 
-      job.setMapperClass(S3GetMapper.class);
+      if (toS3) {
+        job.setMapperClass(S3PutMapper.class);
+      } else {
+        job.setMapperClass(S3GetMapper.class);
+      }
       //job.setReducerClass(S3GetReducer.class);
 
       log.info("before MR job...");

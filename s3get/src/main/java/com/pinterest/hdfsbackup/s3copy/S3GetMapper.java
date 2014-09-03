@@ -22,13 +22,13 @@ import java.util.Set;
  */
 public class S3GetMapper implements Mapper<LongWritable, FilePair, Text, FilePair> {
   private static final Log log = LogFactory.getLog(S3GetMapper.class);
-  private  JobConf conf;
-  private long fileCount = 0;
-  private SimpleExecutor executor;
+  protected JobConf conf;
+  protected long fileCount = 0;
+  protected SimpleExecutor executor;
   public Reporter reporter;
-  OutputCollector<Text, FilePair> collector;
-  S3CopyOptions options;
-  Set<FilePair> unfinishedFiles;
+  public OutputCollector<Text, FilePair> collector;
+  public S3CopyOptions options;
+  protected Set<FilePair> unfinishedFiles;
   public long bytesToCopy = 0;
 
   @Override

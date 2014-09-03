@@ -28,8 +28,8 @@ public class S3CopyOptions {
   public boolean useMultipart = true;
   public int queueSize = 100;
   public int workerThreads = 10;
-  public int maxInflightParts = 1;
-  public long chunkSize = 1024L * 1024 * 32;
+  public int maxInflightParts = 2;
+  public long chunkSize = 1024L * 1024 * 16;
   public boolean useInterimFiles = false;
   // a ',' separated list of dirs to use as interim stage area for multi-part ops.
   public String interimDirs = "";
@@ -95,6 +95,7 @@ public class S3CopyOptions {
       return;
     }
     srcOption.require();
+    destOption.require();
     if (verbose.defined()) {
       this.verbose = true;
     }

@@ -1,4 +1,23 @@
 
+============================
+test dir (2781 GB):
+
+2835 GB
+time hadoop jar /home/shawn/s3distcp-TRUNK-SNAPSHOT.jar  -Dmapred.reduce.tasks=200 -Dmapred.map
+.tasks=1
+--src /hbasebackups/hbasemetann001e/link_pin_index_v1/2014-08-29-06-49-48
+--dest s3n://pinterest-namenode-backup/test/fromhdfs/bighbase-with-checksum/
+
+downloaded from s3 to hdfs:   /user/shawn/froms3/bighbase2/
+
+
+---------
+another test dir at s3:  1 GB
+    s3n://pinterest-namenode-backup/test/tos3dir/
+
+
+
+
 ======================
 debug record:
 
@@ -7,11 +26,11 @@ problem 1. when download large dirs (2781GB), one 20 MB file sees missing data i
 
 last of portion miss
 todo:
-1. multipart download using 1 inflight parts
+(1) multipart download using 1 inflight parts
 
-2. multipart down, via temp local files, 1 inflight parts
+(2). multipart down, via temp local files, 1 inflight parts
 
-3. same as 2, with 10 inflight parts
+(3). same as 2, with 10 inflight parts
   =>  problem fixed.
 
 
@@ -22,6 +41,12 @@ com.amazon.external.elasticmapreduce.s3distcp.CompareFilesRunnable: compare chec
 /hbasebackups/hbasegraphnn001e/node_edge_messages/2014-08-29-06-23-24/.archive/node_edge_messages/2de3072034a5b5428df562a946a2aed2/d/c4010ab1c6a1471a817e6c24cddddbb2
 s3n://pinterest-namenode-backup/test/fromhdfs/midhbase-with-checksum/.archive/node_edge_messages/2de3072034a5b5428df562a946a2aed2/d/c4010ab1c6a1471a817e6c24cddddbb2
 
+=> Fixed.
+Using the newly developed tool (compare-file-checksums),  these two files are identical.
+
+
+
+
 
 
 --------
@@ -31,18 +56,6 @@ time hadoop jar ./s3get-0.1.jar -Ds3copy.chunkSizeMB=16  -Dmapred.reduce.tasks=2
 --src s3n://pinterest-namenode-backup/test/fromhdfs/bighbase-with-checksum/
 --dest /user/shawn/froms3/bighbase2
 
-
-------------
-test dir (2781 GB):
-original copy at hdfs:    /hbasebackups/hbasemetann001e/link_pin_index_v1/2014-08-22-06-51-16/
-
-multipart upload to s3:  s3n://pinterest-namenode-backup/test/fromhdfs/bighbase-with-checksum/
-
-downloaded from s3 to hdfs:   /user/shawn/froms3/bighbase2/
-
----------
-another test dir at s3:  1 GB
-    s3n://pinterest-namenode-backup/test/tos3dir/
 
 
 
