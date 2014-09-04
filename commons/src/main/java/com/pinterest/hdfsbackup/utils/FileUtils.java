@@ -406,6 +406,19 @@ public class FileUtils {
     byte[] buffer = new byte[1024 * 1024];
     int retry = 0;
     int maxRetry = 5;
+    Path filePath = new Path(hdfsFilename);
+
+    FileSystem fs;
+    long fileSize;
+    try {
+      fs = filePath.getFileSystem(conf);
+      fileSize = fs.getContentSummary(filePath).getLength();
+    } catch (IOException e) {
+      log.info("Error before checksum: failed to get FS: " + hdfsFilename);
+      return false;
+    }
+    log.debug(String.format("will compute checksum for file %s: size %d",
+                               hdfsFilename, fileSize));
     while (retry < maxRetry) {
       retry++;
       InputStream ins = FileUtils.openHDFSInputStream(hdfsFilename, conf);
@@ -413,11 +426,6 @@ public class FileUtils {
         continue;
       }
       try {
-        Path filePath = new Path(hdfsFilename);
-        FileSystem fs = filePath.getFileSystem(conf);
-        long fileSize = fs.getContentSummary(filePath).getLength();
-        log.debug(String.format("will compute checksum for file %s: size %d",
-                                  hdfsFilename, fileSize));
         int len = 0;
         long bytesRead = 0;
         while ((len = ins.read(buffer)) > 0) {
@@ -425,20 +433,21 @@ public class FileUtils {
           bytesRead += len;
         }
         if (bytesRead != fileSize) {
-          log.info(String.format("Error: file %s: read bytes %d, file size %d",
-                                    hdfsFilename, bytesRead, filePath));
-          return false;
+          log.info(String.format("Error: file %s: read bytes %d != file size %d",
+                                    hdfsFilename, bytesRead, fileSize));
+        } else {
+          log.info(String.format("hdfs file checksum success: %s", hdfsFilename));
+          return true;
         }
-        log.info(String.format("hdfs file checksum success: %s", hdfsFilename));
-        return true;
       } catch (Exception e) {
-        e.printStackTrace();
+        log.info("Got exception when read for checksum: "+ hdfsFilename);
+        //e.printStackTrace();
       } finally {
         try {
           ins.close();
         } catch (IOException e) {
-          log.info("error when reading hdfs for checksum: " + hdfsFilename);
-          e.printStackTrace();
+          log.info("error to close hdfs for checksum: " + hdfsFilename);
+          //e.printStackTrace();
         }
       }
     }

@@ -98,19 +98,30 @@ public class S3Uploader {
     if (key.startsWith("/")) {
       key = key.substring(1);
     }
-    // Compute the source file checksum.
+    int maxRetry = 5;
+    int retry = 0;
     String srcDigest = null;
-    MessageDigest md = null;
-    try {
-      md = MessageDigest.getInstance("MD5");
-    } catch (NoSuchAlgorithmException e) {
-      e.printStackTrace();
-      return false;
+    boolean srcDigestSuccess = false;
+    // Compute the source file checksum.
+    while (retry < maxRetry) {
+      retry++;
+      MessageDigest md = null;
+      try {
+        md = MessageDigest.getInstance("MD5");
+      } catch (NoSuchAlgorithmException e) {
+        e.printStackTrace();
+        return false;
+      }
+      if (FileUtils.computeHDFSDigest(srcFilename, this.conf, md)) {
+        srcDigest = new String(Base64.encodeBase64(md.digest()), Charset.forName("UTF-8"));
+        srcDigestSuccess = true;
+        break;
+      } else {
+        log.info("failed src file checksum attempt " + retry + ": " + srcFilename);
+      }
     }
-    if (FileUtils.computeHDFSDigest(srcFilename, this.conf, md)) {
-      srcDigest = new String(Base64.encodeBase64(md.digest()), Charset.forName("UTF-8"));
-    } else {
-      log.info("Failed to compute src file checksum: " + srcFilename);
+    if (!srcDigestSuccess) {
+      log.info("Unable to get source file checksum: " + srcFilename);
       return false;
     }
 
@@ -120,9 +131,8 @@ public class S3Uploader {
     metadata.setContentMD5(srcDigest);
     metadata.addUserMetadata("contentmd5", srcDigest);
     metadata.addUserMetadata("contentlength", String.valueOf(srcFileSize));
-    int maxRetry = 5;
-    int retry = 0;
 
+    retry = 0;
     log.info("Will multipart-upload " + srcFilename
                  + " with metadata:" + S3Utils.objectMetadataToString(metadata));
     // Upload to S3, with retries.
