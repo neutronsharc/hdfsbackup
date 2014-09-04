@@ -5,8 +5,9 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 
-import java.util.Map;
-import java.util.PriorityQueue;
+import java.util.*;
+
+import java.util.Collections;
 
 /**
  * Created by shawn on 8/29/14.
@@ -24,35 +25,50 @@ public class FilePairPartition {
     }
   }
 
-  public boolean createFileGroups(FileListingInDir fileList, String destDirname) {
-    if (!destDirname.endsWith("/")) {
+  public boolean createFileGroups(FileListingInDir fileList,
+                                  String destDirname,
+                                  boolean includeDir) {
+    // Make sure dest dir always have a trailing "/".
+    if (destDirname != null && !destDirname.endsWith("/")) {
       destDirname = destDirname + "/";
     }
+
+    // Sort file entries in descending order of file size.
+    List<DirEntry> entries = new ArrayList<DirEntry>((int)(fileList.getFileEntryCount()));
     for (Map.Entry<String, DirEntry> e : fileList.fileEntries.entrySet()) {
-      DirEntry fileEntry = e.getValue();
-      FilePair pair =
-          new FilePair(fileEntry.baseDirname + "/" + fileEntry.entryName,
-                          destDirname == null ? "" : destDirname + fileEntry.entryName,
-                          true,
-                          fileEntry.fileSize);
+      DirEntry ent = e.getValue();
+      entries.add(ent);
+    }
+    Collections.sort(entries);
+    for (DirEntry fileEntry : entries) {
+      FilePair pair = new FilePair(fileEntry.baseDirname + "/" + fileEntry.entryName,
+                                    destDirname == null ? "" : destDirname + fileEntry.entryName,
+                                    true,
+                                    fileEntry.fileSize);
       assert(this.groups.size() > 0);
       FilePairGroup group = this.groups.poll();
       group.add(pair);
       this.groups.add(group);
     }
+    if (!includeDir) return true;
+    // No need to sort dir entries since they are all empty dirs.
     for (Map.Entry<String, DirEntry> e : fileList.dirEntries.entrySet()) {
       DirEntry dirEntry = e.getValue();
-      FilePair pair =
-          new FilePair(dirEntry.baseDirname + "/" + dirEntry.entryName,
-                          destDirname == null ? "" : destDirname + dirEntry.entryName,
-                          false,
-                          0);
+      FilePair pair = new FilePair(dirEntry.baseDirname + "/" + dirEntry.entryName,
+                                    destDirname == null ? "" : destDirname + dirEntry.entryName,
+                                    false,
+                                    0);
       assert(this.groups.size() > 0);
       FilePairGroup group = this.groups.poll();
       group.add(pair);
       this.groups.add(group);
     }
     return true;
+  }
+
+  public boolean createFileGroups(FileListingInDir fileList, String destDirname) {
+    boolean includeDir = true;
+    return createFileGroups(fileList, destDirname, includeDir);
   }
 
   public boolean writeGroupsToFiles(Path baseDirPath, Configuration conf) {
@@ -69,9 +85,12 @@ public class FilePairPartition {
 
   public void display(boolean verbose) {
     log.info(String.format("Have %d file groups\n", groups.size()));
-    if (!verbose) return;
     for (FilePairGroup group : this.groups.toArray(new FilePairGroup[this.groups.size()])) {
-      log.info(group.toString());
+      if (verbose) {
+        log.info(group.toString());
+      } else {
+        log.info(group.briefSummary());
+      }
     }
   }
 }

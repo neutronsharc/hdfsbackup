@@ -577,7 +577,9 @@ public class S3Downloader {
     if (!ret) {
       log.info(String.format("download %s/%s failed, delete dest file %s",
                                 bucket, key, destFilename));
-      FileUtils.deleteHDFSDir(destFilename, this.conf);
+      if (destFilename != null) {
+        FileUtils.deleteHDFSDir(destFilename, this.conf);
+      }
     }
     return ret;
   }
@@ -745,7 +747,9 @@ public class S3Downloader {
     if (!ret) {
       log.info(String.format("download %s/%s failed, delete dest file %s",
                                 bucket, key, destFilename));
-      FileUtils.deleteHDFSDir(destFilename, this.conf);
+      if (destFilename != null) {
+        FileUtils.deleteHDFSDir(destFilename, this.conf);
+      }
     }
     return ret;
   }

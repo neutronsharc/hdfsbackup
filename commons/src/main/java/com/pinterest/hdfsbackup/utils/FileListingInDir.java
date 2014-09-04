@@ -3,6 +3,7 @@ package com.pinterest.hdfsbackup.utils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -15,12 +16,13 @@ import java.util.TreeMap;
  */
 public class FileListingInDir {
   static final Log log = LogFactory.getLog(FileListingInDir.class);
+  // the base dir name, without the trailing "/".
   String baseDirname;
   // The key in this map is the "entry name" of an DirEntry, which is everything except for
   // the base dir name without leading '/'.
   // Example:   "<sub dir1>/<sub dir2>/filename",  "<sub dir>/"
   Map<String, DirEntry> fileEntries;
-  // dirEntries map contains only empty dirs.  non-empty dirs car implicitly contained
+  // dirEntries map contains only empty dirs.  non-empty dirs are implicitly contained
   // in file names in fileEntries map.
   Map<String, DirEntry> dirEntries;
 
@@ -40,6 +42,65 @@ public class FileListingInDir {
     this.dirCount = 0;
     fileEntries = new TreeMap<String, DirEntry>();
     dirEntries = new TreeMap<String, DirEntry>();
+  }
+
+  public boolean compare(FileListingInDir destFileList,
+                         List<Pair<DirEntry, DirEntry> > diffPairs,
+                         List<Pair<DirEntry, DirEntry> > samePairs,
+                         boolean ignoreDir) {
+    if (getFileEntryCount() != destFileList.getFileEntryCount()) {
+      log.info(String.format("source files %d != dest files %d",
+                                getFileEntryCount(), destFileList.getFileEntryCount()));
+      return false;
+    }
+    if (this.totalFileSize != destFileList.totalFileSize) {
+      log.info(String.format("source file total size %d != dest file total size %d",
+                             this.totalFileSize, destFileList.totalFileSize));
+      return false;
+    }
+    long missingFiles = 0;
+    long missingDirs = 0;
+    for (Entry<String, DirEntry> src : getFileEntries()) {
+      if (!destFileList.containsFile(src.getKey())) {
+        missingFiles++;
+        continue;
+      }
+      DirEntry srcfile = src.getValue();
+      DirEntry destfile = destFileList.getFileEntry(srcfile.name());
+      assert(destfile != null);
+      if (!srcfile.isSameEntry(destfile)) {
+        diffPairs.add(new Pair<DirEntry, DirEntry>(srcfile, destfile));
+      } else {
+        samePairs.add(new Pair<DirEntry, DirEntry>(srcfile, destfile));
+      }
+    }
+    return missingDirs == 0 && missingFiles == 0 && diffPairs.size() == 0;
+  }
+
+
+  public boolean containsFile(String filename) {
+    return this.fileEntries.containsKey(filename);
+  }
+
+  public boolean containsDir(String dirname) {
+    return this.dirEntries.containsKey(dirname);
+  }
+
+  /**
+   * Get the DirEntry for the given file name. This filename must exists
+   * in the file entry map.
+   *
+   * @param filename
+   * @return
+   */
+  public DirEntry getFileEntry(String filename) {
+    if (!containsFile(filename)) return null;
+    return this.fileEntries.get(filename);
+  }
+
+  public DirEntry getDirEntry(String dirname) {
+    if (!containsDir(dirname)) return null;
+    return this.dirEntries.get(dirname);
   }
 
   public long getEntryCount() {
@@ -77,6 +138,18 @@ public class FileListingInDir {
     for (Entry<String, DirEntry> e : dirEntries.entrySet()) {
       log.info(e.getValue().toString());
     }
+  }
+
+  public void display(boolean verbose) {
+    log.info("======================= Base dir: " + this.baseDirname);
+    log.info(String.format("%d files, %d empty files, total file size %d, %d empty dirs\n" +
+                               "max-file-size %d, max-size-file: %s\n",
+                              this.fileCount, this.emptyFileCount, this.totalFileSize,
+                              this.dirCount, this.maxFileSize, this.maxSizeFilename));
+    if (!verbose) {
+      return;
+    }
+    dump();
   }
 
   public boolean addEntry(DirEntry entry) {

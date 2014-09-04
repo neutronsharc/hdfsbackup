@@ -48,7 +48,7 @@ public class FilePairGroup implements Comparable<FilePairGroup> {
   }
 
   public long getWeight() {
-    return this.fileCount * 10000 + this.dirCount * 10000 + this.totalFileSize;
+    return this.fileCount * 1000 + this.dirCount * 1000 + this.totalFileSize;
   }
 
   /**
@@ -115,12 +115,17 @@ public class FilePairGroup implements Comparable<FilePairGroup> {
     Collections.sort(this.filePairs, descendingFileSizeComparator);
   }
 
+  public String briefSummary() {
+    return String.format("file group %d: %d files, %d dirs, total %d bytes",
+                         this.groupID, this.fileCount, this.dirCount, this.totalFileSize);
+  }
+
   public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append(String.format("file group %d: %d files, %d dirs, total %d bytes",
                                this.groupID, this.fileCount, this.dirCount, this.totalFileSize));
     for (FilePair pair : this.filePairs) {
-      sb.append("\n" + pair.toString());
+      //sb.append("\n" + pair.toString());
     }
     return sb.toString();
   }

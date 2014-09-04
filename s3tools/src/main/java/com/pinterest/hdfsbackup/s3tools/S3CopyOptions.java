@@ -34,6 +34,8 @@ public class S3CopyOptions {
   // a ',' separated list of dirs to use as interim stage area for multi-part ops.
   public String interimDirs = "";
   public String manifestFilename = null;
+  // "compareChecksum" is used only by compare-dir tool.
+  public boolean compareChecksum = false;
 
   public S3CopyOptions() { }
 
@@ -60,6 +62,8 @@ public class S3CopyOptions {
     // in-flight parts can complete out of order.
     // This is usually faster than waiting for parts to complete in order.
     this.useInterimFiles = conf.getBoolean("s3copy.useInterimFiles", false);
+    // When comparing dir, also compare file checksums.
+    this.compareChecksum = conf.getBoolean("s3copy.compareChecksum", false);
   }
 
   public void showCopyOptions() {
@@ -73,7 +77,8 @@ public class S3CopyOptions {
       .append(String.format("\tqueue size:              %d\n", this.queueSize))
       .append(String.format("\tworker threads per task: %d\n", this.workerThreads))
       .append(String.format("\tmax inflight parts:      %d\n", this.maxInflightParts))
-      .append(String.format("\tuse interim files:       %s\n", this.useInterimFiles));
+      .append(String.format("\tuse interim files:       %s\n", this.useInterimFiles))
+      .append(String.format("\tcompare checksum:        %s\n", this.compareChecksum));
 
     log.info(sb.toString());
   }

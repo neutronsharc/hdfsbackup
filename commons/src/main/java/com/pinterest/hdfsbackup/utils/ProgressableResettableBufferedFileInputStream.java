@@ -18,8 +18,7 @@ public class ProgressableResettableBufferedFileInputStream extends InputStream {
   private long mark = 0L;
   private long pos = 0L;
 
-  public ProgressableResettableBufferedFileInputStream(File file,
-                                                       Progressable progressable)
+  public ProgressableResettableBufferedFileInputStream(File file, Progressable progressable)
       throws IOException {
     this.file = file;
     this.progressable = progressable;

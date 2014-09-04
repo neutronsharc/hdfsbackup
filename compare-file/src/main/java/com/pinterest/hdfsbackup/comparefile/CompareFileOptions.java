@@ -1,4 +1,4 @@
-package com.pinterest.hdfsbackup.filechecksum;
+package com.pinterest.hdfsbackup.comparefile;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;

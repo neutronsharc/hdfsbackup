@@ -1,8 +1,7 @@
 
 ============================
-test dir (2781 GB):
+Big test data:   2835 GB
 
-2835 GB
 time hadoop jar /home/shawn/s3distcp-TRUNK-SNAPSHOT.jar  -Dmapred.reduce.tasks=200 -Dmapred.map
 .tasks=1
 --src /hbasebackups/hbasemetann001e/link_pin_index_v1/2014-08-29-06-49-48
@@ -21,6 +20,9 @@ another test dir at s3:  1 GB
 /hbasebackups/hbaseusermetann001e/board_interests/2014-08-29-09-20-47
 
 s3n://pinterest-namenode-backup/test/fromhdfs/midhbase-with-checksum/
+
+copy back from s3:
+/user/shawn/froms3/midhbase-with-checksum/
 
 ======================
 debug record:

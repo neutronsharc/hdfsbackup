@@ -143,6 +143,10 @@ public class FileUtils {
    * @return
    */
   public static boolean deleteHDFSDir(String dirName, Configuration configuration) {
+    if (dirName == null) {
+      log.error("Error:: empty HDFS path to delete");
+      return true;
+    }
     Path dirPath = new Path(dirName);
     boolean recursive = true;
     log.info("will delete hdfs dir: " + dirName);
@@ -412,7 +416,7 @@ public class FileUtils {
         Path filePath = new Path(hdfsFilename);
         FileSystem fs = filePath.getFileSystem(conf);
         long fileSize = fs.getContentSummary(filePath).getLength();
-        log.info(String.format("will compute checksum for file %s: size %d",
+        log.debug(String.format("will compute checksum for file %s: size %d",
                                   hdfsFilename, fileSize));
         int len = 0;
         long bytesRead = 0;

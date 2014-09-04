@@ -72,6 +72,7 @@ public class DirWalker {
     ObjectListing objects = null;
     boolean finished = false;
 
+    // Base dir name without the trailing "/".
     if (baseDirname.endsWith("/")) {
       baseDirname = baseDirname.substring(0, baseDirname.length() - 1);
     }
@@ -124,7 +125,7 @@ public class DirWalker {
         //
         // "prefix" = "basedir/<opt dir>/<opt filename>", or "basedir/<opt dir>"
         //
-        // obj name = "basedir/<opt dir>/<opt filename>" or  "basedir/<opt dir>/"
+        // key (obj name) = "basedir/<opt dir>/<opt filename>" or  "basedir/<opt dir>/"
         //
         // If obj name is the same as prefix, this is the only file that's listed.
         // If obj name is "prefix/",  this obj is an empty dir.
@@ -132,13 +133,14 @@ public class DirWalker {
         String objName = object.getKey();
 
         if (objName.equals(prefix)) {
-          // User provides "baseDirname" as a file name. Only one file is listed
+          // User provides "baseDirname" as a full file name.
+          // Only one file is listed.
           String filename = objName.substring(objName.lastIndexOf('/') + 1);
           String dirname = baseDirname.substring(0, baseDirname.lastIndexOf('/'));
           log.info(String.format("list a file: basedir = %s, filename = %s",
                                     dirname, filename));
           fileListing.addEntry(new DirEntry(dirname, filename, true, object.getSize()));
-          continue;
+          return fileListing;
         }
 
         int idx = objName.indexOf(prefix);
@@ -170,6 +172,14 @@ public class DirWalker {
     return fileListing;
   }
 
+  /**
+   * Get the fullpath's suffix after prefix.
+   * The returned suffix doesn't have a leading "/".
+   *
+   * @param fullPathname
+   * @param prefix
+   * @return
+   */
   public String getSuffix(String fullPathname, String prefix) {
     int idx = fullPathname.indexOf(prefix);
     if (idx >= 0) {
@@ -183,11 +193,11 @@ public class DirWalker {
   }
 
   public FileListingInDir walkHDFSDir(String baseDirname) {
-    FileListingInDir fileListing = new FileListingInDir(baseDirname);
-    Path dirPath = new Path(baseDirname);
     if (baseDirname.endsWith("/")) {
       baseDirname = baseDirname.substring(0, baseDirname.length() - 1);
     }
+    FileListingInDir fileListing = new FileListingInDir(baseDirname);
+    Path dirPath = new Path(baseDirname);
 
     Path curPath = dirPath;
     try {

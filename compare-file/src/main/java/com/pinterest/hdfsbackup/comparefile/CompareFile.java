@@ -1,4 +1,4 @@
-package com.pinterest.hdfsbackup.filechecksum;
+package com.pinterest.hdfsbackup.comparefile;
 
 import com.pinterest.hdfsbackup.s3tools.S3CopyOptions;
 import com.pinterest.hdfsbackup.s3tools.S3Downloader;
