@@ -527,7 +527,7 @@ public class S3Downloader {
               //log.info(String.format("got obj %s/%s: range [%d, %d]", bucket, key, r.begin,
               //                           r.end));
             } else {
-              log.info(String.format("fail to obj %s/%s: range [%d, %d]",
+              log.info(String.format("fail to download obj %s/%s: range [%d, %d]",
                                         bucket, key, r.begin, r.end));
               partFailed = true;
               break;
@@ -571,7 +571,7 @@ public class S3Downloader {
         log.info(String.format("download %s/%s: checksum mismatch", bucket, key));
         ret = false;
       } else {
-        log.info(String.format("download %s/%s success and checksum success", bucket, key));
+        log.info(String.format("download %s/%s success and checksum matched", bucket, key));
       }
     }
     if (!ret) {
@@ -731,7 +731,7 @@ public class S3Downloader {
                                 bucket, key, bytesCopied, objectSize));
     } else if (verifyChecksum) {
       if (expectedDigest.equals(actualDigest)) {
-        log.info(String.format("download %s/%s success and checksum success, copied %d bytes, " +
+        log.info(String.format("download %s/%s success and checksum matched, copied %d bytes, " +
                                    "%d out of %d parts",
                                   bucket, key, bytesCopied, finishedParts, numberOfParts));
         ret = true;

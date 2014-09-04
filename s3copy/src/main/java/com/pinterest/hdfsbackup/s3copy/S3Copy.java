@@ -86,10 +86,6 @@ public class S3Copy extends Configured implements Tool {
       }
     }
 
-    if (options.destPath == null) {
-      log.info("Please provide dest directory.");
-      return 1;
-    }
     // NOTE: if src is S3 and dest is null, we can still download the S3 files and verify its
     // content against the md5 checksum in s3 obj metadata.  The downloaded objs are
     // not really saved anywhere though.
@@ -99,6 +95,8 @@ public class S3Copy extends Configured implements Tool {
     boolean toS3 = false;
     if (srcType == FSType.S3 && destType == FSType.HDFS) {
       log.info("from S3 to HDFS");
+    } else if (srcType == FSType.S3 && destType == FSType.UNKNOWN) {
+      log.info("Scan S3 for integrity check");
     } else if (srcType == FSType.HDFS && destType == FSType.S3) {
       log.info("from HDFS to S3");
       toS3 = true;

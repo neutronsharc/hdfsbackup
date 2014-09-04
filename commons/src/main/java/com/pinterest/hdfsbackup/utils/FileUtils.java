@@ -25,6 +25,9 @@ public class FileUtils {
   static long iopos = 0;
 
   public static FSType getFSType(String filename) {
+    if (filename == null) {
+      return FSType.UNKNOWN;
+    }
     Path path = new Path(filename);
     URI uri = path.toUri();
     String scheme = uri.getScheme();
