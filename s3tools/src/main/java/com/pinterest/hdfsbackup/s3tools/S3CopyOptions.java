@@ -26,10 +26,10 @@ public class S3CopyOptions {
   // to be passed through system Configuration.
   public boolean verifyChecksum = true;
   public boolean useMultipart = true;
-  public int queueSize = 100;
+  public int queueSize = 2000;
   public int workerThreads = 10;
   public int maxInflightParts = 2;
-  public long chunkSize = 1024L * 1024 * 16;
+  public long chunkSize = 1024L * 1024 * 30;
   public boolean useInterimFiles = false;
   // a ',' separated list of dirs to use as interim stage area for multi-part ops.
   public String interimDirs = "";
@@ -44,15 +44,15 @@ public class S3CopyOptions {
    * @param conf
    */
   public void populateFromConfiguration(Configuration conf) {
-    // Each reducer has a queue to store file pairs to process.
-    this.queueSize = conf.getInt("s3copy.queueSize", 1000);
+    // Each task has a queue to store file pairs to process.
+    this.queueSize = conf.getInt("s3copy.queueSize", 2000);
     // Each reducer spawns this many worker threads.
     this.workerThreads = conf.getInt("s3copy.workerThreads", 10);
     // If use multipart or not. It's hardwired to always be true. Don't overwrite it.
     this.useMultipart = conf.getBoolean("s3copy.multipart", true);
     // Multipart chunk size. This size should match with the multi-part upload
     // chunk size for better performance.
-    this.chunkSize = conf.getInt("s3copy.chunkSizeMB", 16) * 1024L * 1024;
+    this.chunkSize = conf.getInt("s3copy.chunkSizeMB", 30) * 1024L * 1024;
     // Issue this many multi-part request on the wire.
     this.maxInflightParts = conf.getInt("s3copy.maxInflightParts", 2);
     // Whether to verify checksum during transmit.
@@ -100,7 +100,7 @@ public class S3CopyOptions {
       return;
     }
     srcOption.require();
-    destOption.require();
+    //destOption.require();
     if (verbose.defined()) {
       this.verbose = true;
     }

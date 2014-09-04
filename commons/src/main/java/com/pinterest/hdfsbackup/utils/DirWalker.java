@@ -43,7 +43,9 @@ public class DirWalker {
       log.info("unknown fs type: " + baseDirname);
       return null;
     }
-    log.info(fileListing.toString());
+    if (fileListing != null) {
+      log.info(fileListing.toString());
+    }
     return fileListing;
   }
 
@@ -239,6 +241,7 @@ public class DirWalker {
       }
     } catch (IOException e) {
       log.info("fail to list path: " + curPath);
+      return null;
     }
     return fileListing;
   }

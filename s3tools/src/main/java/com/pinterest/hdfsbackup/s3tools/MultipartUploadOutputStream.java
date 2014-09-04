@@ -79,8 +79,8 @@ public class MultipartUploadOutputStream extends OutputStream {
 
     // S3 doesn't save the contentMD5 field in an object metadata for
     // multipart-uploaded object. So we save this info as user metadata.
-    metadata.addUserMetadata("contentmd5", metadata.getContentMD5());
-    metadata.addUserMetadata("contentlength", String.valueOf(metadata.getContentLength()));
+    //metadata.addUserMetadata("contentmd5", metadata.getContentMD5());
+    //metadata.addUserMetadata("contentlength", String.valueOf(metadata.getContentLength()));
 
     InitiateMultipartUploadResult result =
         this.s3.initiateMultipartUpload(new InitiateMultipartUploadRequest(bucketName, key)
@@ -95,7 +95,7 @@ public class MultipartUploadOutputStream extends OutputStream {
     this.currentPartSize = 0;
 
     this.tempDirname = tempDirname;
-    prepareTempFileAndOutput();
+    prepareTempFileToWriteTo();
   }
 
   /**
@@ -103,7 +103,7 @@ public class MultipartUploadOutputStream extends OutputStream {
    * This chunk is read from the input file, saved to this temp file.
    * Later on the temp file is used as input for a multipart upload request.
    */
-  private void prepareTempFileAndOutput() {
+  private void prepareTempFileToWriteTo() {
     try {
       this.currentPartSize = 0L;
       this.partCount++;
@@ -139,7 +139,7 @@ public class MultipartUploadOutputStream extends OutputStream {
                                                      new MultipartUploadCallable(this.partCount, this.currentTemp, md5sum));
     this.futures.add(tag);
     if (!isLastChunk) {
-      prepareTempFileAndOutput();
+      prepareTempFileToWriteTo();
     }
   }
 
@@ -206,7 +206,8 @@ public class MultipartUploadOutputStream extends OutputStream {
                                                                          etags));
       log.info(String.format("have closed multipart upload %s/%s", this.bucketName, this.key));
     } catch (Exception e) {
-      log.info(String.format("multipart upload failed: %s/%s", this.bucketName, this.key));
+      log.info(String.format("Will abort multipart upload: %s/%s", this.bucketName,
+                                this.key));
       this.s3.abortMultipartUpload(new AbortMultipartUploadRequest(this.bucketName,
                                                                    this.key,
                                                                    this.uploadId));

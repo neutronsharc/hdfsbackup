@@ -35,16 +35,31 @@ public class S3PutFileRunnable implements Runnable {
     boolean ret = false;
     if (srcFilename.endsWith("/")) {
       // src entry is an empty dir,  only needs to create a dest dir.
-      if (destFilename.equals("")) {
+      if (destFilename == null || destFilename.equals("")) {
         ret = true;
       } else {
         // Create a S3 empty object with "/" at the end of name to emulate an empty dir.
         // For now, reuse the hadoop FS API to create an S3 object.
+        if (!destFilename.endsWith("/")) {
+          destFilename = destFilename + "/";
+        }
         log.info("will create S3 object: " + destFilename);
-        if (S3Utils.createS3Directory(destFilename, this.s3PutMapper.conf)) {
+        if (S3Utils.createS3Object(destFilename, this.s3PutMapper.conf)) {
           ret = true;
         } else {
           log.info("failed to create dest dir, filepair = " + this.filePair.toString());
+          ret = false;
+        }
+      }
+    } else if (this.filePair.fileSize.get() == 0) {
+      if (destFilename == null || destFilename.equals("")) {
+        ret = true;
+      }
+      else {
+        if (S3Utils.createS3Object(destFilename, this.s3PutMapper.conf)) {
+          ret = true;
+        } else {
+          log.info("failed to create dest object, filepair = " + this.filePair.toString());
           ret = false;
         }
       }

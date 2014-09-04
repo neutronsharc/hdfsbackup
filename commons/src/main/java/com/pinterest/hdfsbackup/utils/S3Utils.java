@@ -6,9 +6,7 @@ import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.InstanceProfileCredentialsProvider;
 import com.amazonaws.services.s3.AmazonS3Client;
-import com.amazonaws.services.s3.model.GetObjectMetadataRequest;
-import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.PutObjectResult;
+import com.amazonaws.services.s3.model.*;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -44,13 +42,14 @@ public class S3Utils {
   public static ObjectMetadata getObjectMetadata(AmazonS3Client s3Client,
                                                  GetObjectMetadataRequest request) {
     ObjectMetadata metadata = null;
-    int retry = 3;
+    int retry = 5;
     boolean success = false;
     while (retry > 0) {
       retry--;
       try {
         metadata = s3Client.getObjectMetadata(request);
         success = true;
+        break;
       } catch (AmazonServiceException ase) {
         log.info("Caught ServiceExcpetion", ase);
       } catch (AmazonClientException ace) {
@@ -101,19 +100,16 @@ public class S3Utils {
     return (scheme.equals("s3")) || (scheme.equals("s3n"));
   }
 
-  public static boolean createS3Directory(String dirname, Configuration conf) {
+  public static boolean createS3Object(String objname, Configuration conf) {
     AmazonS3Client s3Client = S3Utils.createAmazonS3Client(conf);
     ObjectMetadata metadata = new ObjectMetadata();
     metadata.setContentLength(0);
-    Path path = new Path(dirname);
+    Path path = new Path(objname);
     URI dirUri = path.toUri();
     String bucket = dirUri.getHost();
     String key = dirUri.getPath();
     if (key.startsWith("/")) {
       key = key.substring(1);
-    }
-    if (!key.endsWith("/")) {
-      key = key + "/";
     }
     int retry = 0;
     int maxRetry = 5;
@@ -122,7 +118,7 @@ public class S3Utils {
       try {
         InputStream emptyContent = new ByteArrayInputStream(new byte[0]);
         PutObjectResult result = s3Client.putObject(bucket, key, emptyContent, metadata);
-        log.info(String.format("Have created S3 directory %s/%s", bucket, key));
+        log.info(String.format("Have created S3 object %s/%s", bucket, key));
         return true;
       } catch (AmazonServiceException ase) {
         log.info("Server error: " + S3Utils.AWSServiceExceptionToString(ase));
@@ -130,7 +126,71 @@ public class S3Utils {
         log.info("Client error: " + ace.toString());
       }
     }
-    log.info(String.format("Failed to create S3 directory %s/%s", bucket, key));
+    log.info(String.format("Failed to create S3 object %s/%s", bucket, key));
+    return false;
+  }
+
+  public static boolean addS3ObjectUserMetadata(AmazonS3Client s3client,
+                                                String bucket,
+                                                String key,
+                                                Map<String, String> newuserMetadata) {
+    ObjectMetadata objMetadata = S3Utils.getObjectMetadata(s3client, bucket, key);
+    if (objMetadata == null) {
+      log.info(String.format("unable to get obj original metadata: %s/%s", bucket, key));
+      return false;
+    }
+    log.info(String.format("obj %s/%s: original metadata:\n%s", bucket, key,
+                              objectMetadataToString(objMetadata)));
+    for (Entry<String, String> ent : newuserMetadata.entrySet()) {
+      String userKey = ent.getKey();
+      String userValue = ent.getValue();
+      log.info(String.format("add user metadata: [%s = %s] to %s/%s",
+                                userKey, userValue, bucket, key));
+      objMetadata.addUserMetadata(userKey, userValue);
+    }
+    CopyObjectRequest request = new CopyObjectRequest(bucket, key, bucket, key)
+                                    .withSourceBucketName(bucket)
+                                    .withSourceKey(key)
+                                    .withNewObjectMetadata(objMetadata);
+    int retry = 0;
+    int maxRetry = 5;
+    while (retry < maxRetry) {
+      retry++;
+      try {
+        CopyObjectResult result = s3client.copyObject(request);
+        if (result == null) {
+          continue;
+        }
+        ObjectMetadata afterCopyMetadata = S3Utils.getObjectMetadata(s3client, bucket, key);
+        if (afterCopyMetadata == null) {
+          continue;
+        }
+        log.info(String.format("obj %s/%s: after-copy metadata:\n%s", bucket, key,
+                                  objectMetadataToString(afterCopyMetadata)));
+        boolean match = true;
+        for (Entry<String, String> ent : newuserMetadata.entrySet()) {
+          String userKey = ent.getKey();
+          String userValue = ent.getValue();
+          String afterCopyValue = afterCopyMetadata.getUserMetadata().get(userKey);
+          if (!afterCopyValue.equals(userValue)) {
+            log.info(String.format("Error: after copy metdata mismatch: key=%s, " +
+                                      "value [%s,%s] msimtach for obj %s/%s",
+                                      userKey, userValue, afterCopyValue,
+                                      bucket, key));
+            match = false;
+            break;
+          }
+        }
+        if (match) {
+          return true;
+        }
+      } catch (AmazonServiceException ase) {
+        log.info("Server error when set obj metadata: " + S3Utils.AWSServiceExceptionToString(ase));
+      } catch (AmazonClientException ace) {
+        log.info("Client error when set obj metadata: " + ace.toString());
+      }
+    }
     return false;
   }
 }
+

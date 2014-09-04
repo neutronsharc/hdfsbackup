@@ -35,6 +35,15 @@ public class S3Copy extends Configured implements Tool {
 
     DirWalker dirWalker = new DirWalker(this.conf);
     FileListingInDir srcFileList = dirWalker.walkDir(options.srcPath);
+    if (srcFileList == null) {
+      log.info("Error: source dir non-exist: " + options.srcPath);
+      return 1;
+    }
+
+    // NOTE: There is a special case:  src is S3, and no dest specified. We will download
+    // the S3 objects, verify the actual content checksum matches with the checksum stored
+    // in the object metadata. The S3 object is not saved anywhere.
+    // This mode is useful for integrity check of S3 objects.
 
     FSType srcType = FileUtils.getFSType(options.srcPath);
     // A special case: only download / upload one S3 object.
@@ -58,7 +67,11 @@ public class S3Copy extends Configured implements Tool {
               return 1;
             }
           } else {
-            // copy from HDFS to S3
+            // copy from HDFS to S3.  Must specify dest S3 dir.
+            if (options.destPath == null) {
+              log.info("Please provide dest directory.");
+              return 1;
+            }
             s3Uploader = new S3Uploader(this.conf, options, progressable);
             if (s3Uploader.uploadFile(srcEntry, options.destPath)) {
               return 0;
@@ -73,6 +86,10 @@ public class S3Copy extends Configured implements Tool {
       }
     }
 
+    if (options.destPath == null) {
+      log.info("Please provide dest directory.");
+      return 1;
+    }
     // NOTE: if src is S3 and dest is null, we can still download the S3 files and verify its
     // content against the md5 checksum in s3 obj metadata.  The downloaded objs are
     // not really saved anywhere though.
