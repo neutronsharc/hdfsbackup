@@ -21,63 +21,82 @@ public class CompareFile {
 
 
   public static void main(String args[]) {
-    CompareFileOptions options = new CompareFileOptions(args);
+    /*CompareFileOptions options = new CompareFileOptions(args);
     if (options.helpDefined) {
       return;
-    }
+    }*/
 
     Configuration conf = new Configuration();
+    String srcChecksum = "";
+    String destChecksum = "";
+    S3CopyOptions s3CopyOptions = new S3CopyOptions(args);
+    s3CopyOptions.populateFromConfiguration(conf);
+    s3CopyOptions.showCopyOptions();
+    Progressable progress = new Progressable() {
+      @Override
+      public void progress() {}};
 
-    // We only support S3 and HDFS file system for now.
-    FSType srcType = FileUtils.getFSType(options.srcPath);
-    FSType destType = FileUtils.getFSType(options.destPath);
+    FSType srcType = FileUtils.getFSType(s3CopyOptions.srcPath);
+
+    // A special case: only read S3 and verify checksum.
+    if (srcType == FSType.S3 && s3CopyOptions.destPath == null) {
+      S3Downloader s3Downloader = new S3Downloader(conf, s3CopyOptions, progress);
+      if (s3Downloader.DownloadFile(s3CopyOptions.srcPath, null, true)) {
+        log.info("S3 file checksum verify success");
+        System.exit(0);
+      } else {
+        log.info("S3 file checksum failed");
+        System.exit(1);
+      }
+    }
+    // Now, both src and dest are provided. We will compare the two files.
+    // As of now only S3 and HDFS are supported.
+    // TODO (shawn@):  support local disk files.
+    FSType destType = FileUtils.getFSType(s3CopyOptions.destPath);
     if (srcType != FSType.S3 && srcType != FSType.HDFS &&
         destType != FSType.HDFS && destType != FSType.S3) {
       log.info("only HDFS and S3 are supported right now.");
       System.exit(1);
     }
 
-    String srcChecksum = "";
-    String destChecksum = "";
-    S3CopyOptions s3CopyOptions = new S3CopyOptions();
-    s3CopyOptions.populateFromConfiguration(conf);
-    Progressable progress = new Progressable() {
-      @Override
-      public void progress() {}};
+
     int ret = 0;
+
     try {
+      log.info("First, read source file: " + s3CopyOptions.srcPath);
       if (srcType == FSType.S3) {
         S3Downloader s3Downloader = new S3Downloader(conf, s3CopyOptions, progress);
-        if (s3Downloader.DownloadFile(options.srcPath, null, false)) {
+        if (s3Downloader.DownloadFile(s3CopyOptions.srcPath, null, false)) {
           srcChecksum = s3Downloader.getLastMD5Checksum();
         } else {
-          log.info("failed to download src s3 file: " + options.srcPath);
+          log.info("failed to download src s3 file: " + s3CopyOptions.srcPath);
           System.exit(1);
         }
       } else if (srcType == FSType.HDFS) {
         MessageDigest md = MessageDigest.getInstance("MD5");
-        if (FileUtils.computeHDFSDigest(options.srcPath, conf, md)) {
+        if (FileUtils.computeHDFSDigest(s3CopyOptions.srcPath, conf, md)) {
           srcChecksum = new String(Base64.encodeBase64(md.digest()), Charset.forName("UTF-8"));
         } else {
-          log.info("failed to compute hdfs digest: " + options.srcPath);
+          log.info("failed to compute hdfs digest: " + s3CopyOptions.srcPath);
           System.exit(1);
         }
       }
 
+      log.info("Second, read dest file: " + s3CopyOptions.destPath);
       if (destType == FSType.S3) {
         S3Downloader s3Downloader = new S3Downloader(conf, s3CopyOptions, progress);
-        if (s3Downloader.DownloadFile(options.destPath, null, false)) {
+        if (s3Downloader.DownloadFile(s3CopyOptions.destPath, null, false)) {
           destChecksum = s3Downloader.getLastMD5Checksum();
         } else {
-          log.info("failed to download dest file: " + options.srcPath);
+          log.info("failed to download dest file: " + s3CopyOptions.srcPath);
           System.exit(1);
         }
       } else if (destType == FSType.HDFS) {
         MessageDigest md = MessageDigest.getInstance("MD5");
-        if (FileUtils.computeHDFSDigest(options.destPath, conf, md)) {
-          srcChecksum = new String(Base64.encodeBase64(md.digest()), Charset.forName("UTF-8"));
+        if (FileUtils.computeHDFSDigest(s3CopyOptions.destPath, conf, md)) {
+          destChecksum = new String(Base64.encodeBase64(md.digest()), Charset.forName("UTF-8"));
         } else {
-          log.info("failed to compute hdfs digest: " + options.srcPath);
+          log.info("failed to compute hdfs digest: " + s3CopyOptions.srcPath);
           System.exit(1);
         }
       }
@@ -91,6 +110,7 @@ public class CompareFile {
         ret = 1;
       }
     } catch (Exception e) {
+      log.info("Error when reading data!");
       ret = 1;
     }
     System.exit(ret);
