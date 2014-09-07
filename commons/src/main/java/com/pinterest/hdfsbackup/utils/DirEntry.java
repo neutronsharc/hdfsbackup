@@ -31,7 +31,7 @@ public class DirEntry implements Comparable {
     sb.append(this.baseDirname)
       .append(" | ")
       .append(this.entryName)
-      .append(this.isFile ? " | file |" : " | dir |")
+      .append(this.isFile ? " | file | " : " | dir | ")
       .append(String.valueOf(this.fileSize));
     return sb.toString();
   }

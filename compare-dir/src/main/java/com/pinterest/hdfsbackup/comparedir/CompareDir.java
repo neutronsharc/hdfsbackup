@@ -34,9 +34,8 @@ public class CompareDir extends Configured implements Tool {
 
     // We only support S3 and HDFS file system for now.
     FSType srcType = FileUtils.getFSType(options.srcPath);
-    FSType destType = FileUtils.getFSType(options.destPath);
-    if (srcType != FSType.S3 && srcType != FSType.HDFS &&
-            destType != FSType.HDFS && destType != FSType.S3) {
+
+    if (srcType != FSType.S3 && srcType != FSType.HDFS) {
       log.info("only HDFS and S3 are supported right now.");
       System.exit(1);
     }
@@ -44,8 +43,17 @@ public class CompareDir extends Configured implements Tool {
     // Walk the src and dest dir.
     DirWalker dirWalker = new DirWalker(conf);
     FileListingInDir srcFileList = dirWalker.walkDir(options.srcPath);
-    FileListingInDir destFileList = dirWalker.walkDir(options.destPath);
     srcFileList.display(options.verbose);
+
+    if (options.destPath == null) {
+      return 0;
+    }
+    FSType destType = FileUtils.getFSType(options.destPath);
+    if (destType != FSType.HDFS && destType != FSType.S3) {
+      log.info("only HDFS and S3 are supported right now.");
+      System.exit(1);
+    }
+    FileListingInDir destFileList = dirWalker.walkDir(options.destPath);
     destFileList.display(options.verbose);
 
     List<Pair<DirEntry, DirEntry> > diffPairs = new LinkedList<Pair<DirEntry, DirEntry>>();

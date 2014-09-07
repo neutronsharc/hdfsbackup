@@ -111,6 +111,11 @@ public class S3Utils {
     if (key.startsWith("/")) {
       key = key.substring(1);
     }
+    // Sometimes an object name is "dir/" which means user wants to create
+    // an S3 object to simulate a dir.
+    if (objname.endsWith("/") && !key.endsWith("/")) {
+      key = key + "/";
+    }
     int retry = 0;
     int maxRetry = 5;
     while (retry < maxRetry) {
