@@ -48,21 +48,24 @@ public class FileListingInDir {
                          List<Pair<DirEntry, DirEntry> > diffPairs,
                          List<Pair<DirEntry, DirEntry> > samePairs,
                          boolean ignoreDir) {
+    boolean isSame = true;
     if (getFileEntryCount() != destFileList.getFileEntryCount()) {
       log.info(String.format("source files %d != dest files %d",
                                 getFileEntryCount(), destFileList.getFileEntryCount()));
-      return false;
+      isSame = false;
     }
     if (this.totalFileSize != destFileList.totalFileSize) {
       log.info(String.format("source file total size %d != dest file total size %d",
                              this.totalFileSize, destFileList.totalFileSize));
-      return false;
+      isSame = false;
     }
-    long missingFiles = 0;
+    long missingFilesAtDest = 0;
+    long missingFilesAtSrc = 0;
     long missingDirs = 0;
     for (Entry<String, DirEntry> src : getFileEntries()) {
       if (!destFileList.containsFile(src.getKey())) {
-        missingFiles++;
+        missingFilesAtDest++;
+        diffPairs.add(new Pair<DirEntry, DirEntry>(src.getValue(), null));
         continue;
       }
       DirEntry srcfile = src.getValue();
@@ -74,7 +77,19 @@ public class FileListingInDir {
         samePairs.add(new Pair<DirEntry, DirEntry>(srcfile, destfile));
       }
     }
-    return missingDirs == 0 && missingFiles == 0 && diffPairs.size() == 0;
+
+    for (Entry<String, DirEntry> dest : destFileList.getFileEntries()) {
+      if (!containsFile(dest.getKey())) {
+        missingFilesAtSrc++;
+        diffPairs.add(new Pair<DirEntry, DirEntry>(null, dest.getValue()));
+      }
+    }
+    if (missingFilesAtDest > 0 || missingFilesAtSrc > 0) {
+      log.info(String.format("%d files missing at src, %d files missing at dest",
+                                missingFilesAtSrc, missingFilesAtDest));
+    }
+    return isSame && missingDirs == 0 && missingFilesAtDest == 0
+               && missingFilesAtSrc == 0 && diffPairs.size() == 0;
   }
 
 

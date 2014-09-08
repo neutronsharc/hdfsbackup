@@ -64,7 +64,8 @@ public class CompareDir extends Configured implements Tool {
                                 options.srcPath, options.destPath, diffPairs.size()));
 
       for (Pair<DirEntry, DirEntry> pair : diffPairs) {
-        log.info(pair.getL().toString() + " :: " + pair.getR().toString());
+        log.info((pair.getL() != null ? pair.getL().toString() : " null ") + " :: " +
+                     (pair.getR() != null ? pair.getR().toString() : " null"));
       }
       return 1;
     }
