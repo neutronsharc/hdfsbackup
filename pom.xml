@@ -16,6 +16,7 @@
         <module>s3copy</module>
         <module>compare-file</module>
         <module>compare-dir</module>
+        <module>cleanup-multipart-uploads</module>
     </modules>
 
     <dependencies>
