@@ -24,6 +24,48 @@ public class S3Copy extends Configured implements Tool {
   private static final Log log = LogFactory.getLog(S3Copy.class);
   private Configuration conf;
 
+
+  public int copyOneFile(DirEntry srcEntry, S3CopyOptions options) {
+    FSType srcType = FileUtils.getFSType(options.srcPath);
+    S3Downloader s3Downloader = null;
+    S3Uploader s3Uploader = null;
+
+    if (!srcEntry.isFile) {
+      log.info("source object is a dir: " + srcEntry.toString());
+      return 0;
+    }
+    try {
+      Progressable progressable = new Progressable() {
+        public void progress() {
+        }
+      };
+      if (srcType == FSType.S3) {
+        // Copy from S3 to HDFs.
+        s3Downloader = new S3Downloader(this.conf, options, progressable);
+        if (s3Downloader.DownloadFile(srcEntry, options.destPath, options.verifyChecksum)) {
+          return 0;
+        } else {
+          return 1;
+        }
+      } else {
+        // copy from HDFS to S3.  Must specify dest S3 dir.
+        if (options.destPath == null) {
+          log.info("Please provide dest directory.");
+          return 1;
+        }
+        s3Uploader = new S3Uploader(this.conf, options, progressable);
+        if (s3Uploader.uploadFile(srcEntry, options.destPath)) {
+          return 0;
+        } else {
+          return 1;
+        }
+      }
+    } finally {
+      if (s3Downloader != null) s3Downloader.close();
+      if (s3Uploader != null) s3Uploader.close();
+    }
+  }
+
   @Override
   public int run(String[] strings) throws Exception {
     S3CopyOptions options = new S3CopyOptions(strings);
@@ -33,70 +75,59 @@ public class S3Copy extends Configured implements Tool {
     options.populateFromConfiguration(this.conf);
     options.showCopyOptions();
 
-    DirWalker dirWalker = new DirWalker(this.conf);
-    FileListingInDir srcFileList = dirWalker.walkDir(options.srcPath);
-    if (srcFileList == null) {
-      log.info("Error: source dir non-exist: " + options.srcPath);
-      return 1;
-    }
-
     // NOTE: There is a special case:  src is S3, and no dest specified. We will download
     // the S3 objects, verify the actual content checksum matches with the checksum stored
     // in the object metadata. The S3 object is not saved anywhere.
     // This mode is useful for integrity check of S3 objects.
 
-    FSType srcType = FileUtils.getFSType(options.srcPath);
-    // A special case: only download / upload one S3 object.
-    if (srcFileList.getFileEntryCount() == 1) {
-      S3Downloader s3Downloader = null;
-      S3Uploader s3Uploader = null;
-      for (Map.Entry<String, DirEntry> e : srcFileList.getFileEntries()) {
-        DirEntry srcEntry = e.getValue();
-        if (!srcEntry.isFile) {
-          log.info("source object is a dir: " + e.toString());
-          return 0;
-        }
-        try {
-          Progressable progressable = new Progressable() {public void progress() {}};
-          if (srcType == FSType.S3) {
-            // Copy from S3 to HDFs.
-            s3Downloader = new S3Downloader(this.conf, options, progressable);
-            if (s3Downloader.DownloadFile(srcEntry, options.destPath, options.verifyChecksum)) {
-              return 0;
-            } else {
-              return 1;
-            }
-          } else {
-            // copy from HDFS to S3.  Must specify dest S3 dir.
-            if (options.destPath == null) {
-              log.info("Please provide dest directory.");
-              return 1;
-            }
-            s3Uploader = new S3Uploader(this.conf, options, progressable);
-            if (s3Uploader.uploadFile(srcEntry, options.destPath)) {
-              return 0;
-            } else {
-              return 1;
-            }
-          }
-        } finally {
-          if (s3Downloader != null) s3Downloader.close();
-          if (s3Uploader != null) s3Uploader.close();
+    FilePairGroup filePairGroup = null;
+    FileListingInDir srcFileList = null;
+    FSType srcType;
+    FSType destType;
+    boolean toS3 = false;
+
+    if (options.manifestFilename != null) {
+      filePairGroup = new FilePairGroup(0);
+
+      long count = filePairGroup.initFromFile(options.manifestFilename);
+      if (count <= 0) {
+        log.info("Error parsing manifest file: " + options.manifestFilename);
+        return 1;
+      } else {
+        log.info(String.format("Will copy %d files at manifest file: %s",
+                                  count, options.manifestFilename));
+      }
+      srcType = FileUtils.getFSType(filePairGroup.getFilePairs().get(0).srcFile.toString());
+      destType = FileUtils.getFSType(filePairGroup.getFilePairs().get(0).destFile.toString());
+
+    } else {
+      DirWalker dirWalker = new DirWalker(this.conf);
+      //FileListingInDir srcFileList = dirWalker.walkDir(options.srcPath);
+      srcFileList = dirWalker.walkDir(options.srcPath);
+      if (srcFileList == null) {
+        log.info("Error: source dir non-exist: " + options.srcPath);
+        return 1;
+      }
+      // A special case: only download / upload one file between HDFS and S3.
+      if (srcFileList.getFileEntryCount() == 1) {
+        for (Map.Entry<String, DirEntry> e : srcFileList.getFileEntries()) {
+          log.info("will copy only one file: " + e.getValue().toString());
+          return copyOneFile(e.getValue(), options);
         }
       }
+      srcType = FileUtils.getFSType(options.srcPath);
+      destType = FileUtils.getFSType(options.destPath);
     }
-
     // NOTE: if src is S3 and dest is null, we can still download the S3 files and verify its
     // content against the md5 checksum in s3 obj metadata.  The downloaded objs are
     // not really saved anywhere though.
-
     // TODO(shawn@): support local file.
-    FSType destType = FileUtils.getFSType(options.destPath);
-    boolean toS3 = false;
     if (srcType == FSType.S3 && destType == FSType.HDFS) {
       log.info("from S3 to HDFS");
+      toS3 = false;
     } else if (srcType == FSType.S3 && destType == FSType.UNKNOWN) {
       log.info("Scan S3 for integrity check");
+      toS3 = false;
     } else if (srcType == FSType.HDFS && destType == FSType.S3) {
       log.info("from HDFS to S3");
       toS3 = true;
@@ -120,7 +151,17 @@ public class S3Copy extends Configured implements Tool {
       job.setNumReduceTasks(0);
       int numberMappers = job.getNumMapTasks();
       FilePairPartition partition = new FilePairPartition(numberMappers);
-      partition.createFileGroups(srcFileList, options.destPath);
+      if (srcFileList != null) {
+        partition.createFileGroups(srcFileList, options.destPath);
+        job.setJobName(String.format("S3Copy  %s => %s,  %s checksum",
+                                        options.srcPath, options.destPath,
+                                        options.verifyChecksum ? "with" : "no"));
+      } else {
+        partition.createFileGroupsFromFilePairs(filePairGroup.getFilePairs());
+        job.setJobName(String.format("S3Copy  mainfest = %s,  %s checksum",
+                                        options.manifestFilename,
+                                        options.verifyChecksum ? "with" : "no"));
+      }
       partition.display(options.verbose);
       if (!partition.writeGroupsToFiles(mapInputDirPath, this.conf)) {
         log.info("failed to write file group files.");
@@ -128,9 +169,6 @@ public class S3Copy extends Configured implements Tool {
       }
 
       // set up options
-      job.setJobName(String.format("S3Copy  %s => %s,  %s checksum",
-                                      options.srcPath, options.destPath,
-                                      options.verifyChecksum ? "with" : "no"));
       job.setInputFormat(SequenceFileInputFormat.class);
       job.setOutputFormat(TextOutputFormat.class);
 

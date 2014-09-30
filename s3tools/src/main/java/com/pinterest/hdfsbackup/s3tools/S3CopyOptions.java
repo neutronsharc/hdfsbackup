@@ -99,8 +99,16 @@ public class S3CopyOptions {
       this.helpDefined = true;
       return;
     }
-    srcOption.require();
-    //destOption.require();
+    if (!manifestFilenameOption.defined()) {
+      srcOption.require();
+      //destOption.require();
+    } else {
+      if (srcOption.defined() || destOption.defined()) {
+        log.info("Error: Cannot specify --manifest and --src/dest at the same time.");
+        System.exit(1);
+      }
+    }
+
     if (verbose.defined()) {
       this.verbose = true;
     }

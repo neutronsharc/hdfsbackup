@@ -30,48 +30,68 @@ public class CompareDir extends Configured implements Tool {
     }
     options.populateFromConfiguration(this.conf);
     options.showCopyOptions();
-    //Configuration conf = new Configuration();
+
+    FilePairGroup filePairGroup = null;
+    FileListingInDir srcFileList = null;
+    FSType srcType;
+    FSType destType;
 
     // We only support S3 and HDFS file system for now.
-    FSType srcType = FileUtils.getFSType(options.srcPath);
+    if (options.manifestFilename != null) {
+      filePairGroup = new FilePairGroup(0);
+      long count = filePairGroup.initFromFile(options.manifestFilename);
+      if (count <= 0) {
+        log.info("Error parsing manifest file: " + options.manifestFilename);
+        return 1;
+      } else {
+        log.info(String.format("Will compare %d files at manifest file: %s",
+                                  count, options.manifestFilename));
+      }
+      srcType = FileUtils.getFSType(filePairGroup.getFilePairs().get(0).srcFile.toString());
+      destType = FileUtils.getFSType(filePairGroup.getFilePairs().get(0).destFile.toString());
+    } else {
+      srcType = FileUtils.getFSType(options.srcPath);
+      destType = FileUtils.getFSType(options.destPath);
+    }
 
     if (srcType != FSType.S3 && srcType != FSType.HDFS) {
       log.info("only HDFS and S3 are supported right now.");
       System.exit(1);
     }
-
-    // Walk the src and dest dir.
-    DirWalker dirWalker = new DirWalker(conf);
-    FileListingInDir srcFileList = dirWalker.walkDir(options.srcPath);
-    srcFileList.display(options.verbose);
-
-    if (options.destPath == null) {
-      return 0;
-    }
-    FSType destType = FileUtils.getFSType(options.destPath);
     if (destType != FSType.HDFS && destType != FSType.S3) {
       log.info("only HDFS and S3 are supported right now.");
       System.exit(1);
     }
-    FileListingInDir destFileList = dirWalker.walkDir(options.destPath);
-    destFileList.display(options.verbose);
 
-    List<Pair<DirEntry, DirEntry> > diffPairs = new LinkedList<Pair<DirEntry, DirEntry>>();
-    List<Pair<DirEntry, DirEntry> > samePairs = new LinkedList<Pair<DirEntry, DirEntry>>();
-    boolean compareDir = false;
-    if (!srcFileList.compare(destFileList, diffPairs, samePairs, compareDir)) {
-      log.info(String.format("Error: dirs %s | %s don't match:: %d diff files",
-                                options.srcPath, options.destPath, diffPairs.size()));
-
-      for (Pair<DirEntry, DirEntry> pair : diffPairs) {
-        log.info((pair.getL() != null ? pair.getL().toString() : " null ") + " :: " +
-                     (pair.getR() != null ? pair.getR().toString() : " null"));
+    // Walk the src and dest dir.
+    if (options.manifestFilename == null) {
+      DirWalker dirWalker = new DirWalker(conf);
+      srcFileList = dirWalker.walkDir(options.srcPath);
+      srcFileList.display(options.verbose);
+      if (options.destPath == null) {
+        return 0;
       }
-      return 1;
-    }
-    if (!options.compareChecksum) {
-      log.info(String.format("dirs \"%s\" | \"%s\" match", options.srcPath, options.destPath));
-      return 0;
+
+      FileListingInDir destFileList = dirWalker.walkDir(options.destPath);
+      destFileList.display(options.verbose);
+
+      List<Pair<DirEntry, DirEntry>> diffPairs = new LinkedList<Pair<DirEntry, DirEntry>>();
+      List<Pair<DirEntry, DirEntry>> samePairs = new LinkedList<Pair<DirEntry, DirEntry>>();
+      boolean compareDir = false;
+      if (!srcFileList.compare(destFileList, diffPairs, samePairs, compareDir)) {
+        log.info(String.format("Error: dirs %s | %s don't match:: %d diff files",
+                                  options.srcPath, options.destPath, diffPairs.size()));
+
+        for (Pair<DirEntry, DirEntry> pair : diffPairs) {
+          log.info((pair.getL() != null ? pair.getL().toString() : " null ") + " :: " +
+                       (pair.getR() != null ? pair.getR().toString() : " null"));
+        }
+        return 1;
+      }
+      if (!options.compareChecksum) {
+        log.info(String.format("dirs \"%s\" | \"%s\" match", options.srcPath, options.destPath));
+        return 0;
+      }
     }
 
     // Need to compare checksums for all file pairs.
@@ -89,7 +109,17 @@ public class CompareDir extends Configured implements Tool {
       int numberMappers = job.getNumMapTasks();
       FilePairPartition partition = new FilePairPartition(numberMappers);
       // Not include dir in the file comparison.
-      partition.createFileGroups(srcFileList, options.destPath, false);
+      if (srcFileList != null) {
+        partition.createFileGroups(srcFileList, options.destPath, false);
+        job.setJobName(String.format("CompareDir  %s <=> %s,  %s checksum",
+                                        options.srcPath, options.destPath,
+                                        options.verifyChecksum ? "with" : "no"));
+      } else {
+        partition.createFileGroupsFromFilePairs(filePairGroup.getFilePairs());
+        job.setJobName(String.format("CompareDir manifest = %s, %s checksum",
+                                        options.manifestFilename,
+                                        options.verifyChecksum ? "with" : "no"));
+      }
       partition.display(options.verbose);
       if (!partition.writeGroupsToFiles(mapInputDirPath, this.conf)) {
         log.info("failed to write file group files.");
@@ -97,9 +127,6 @@ public class CompareDir extends Configured implements Tool {
       }
 
       // set up options
-      job.setJobName(String.format("CompareDir  %s <=> %s,  %s checksum",
-                                      options.srcPath, options.destPath,
-                                      options.verifyChecksum ? "with" : "no"));
       job.setInputFormat(SequenceFileInputFormat.class);
       job.setOutputFormat(TextOutputFormat.class);
 

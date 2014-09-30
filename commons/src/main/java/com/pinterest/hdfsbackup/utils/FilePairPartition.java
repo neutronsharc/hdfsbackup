@@ -71,6 +71,17 @@ public class FilePairPartition {
     return createFileGroups(fileList, destDirname, includeDir);
   }
 
+  public boolean createFileGroupsFromFilePairs(List<FilePair> filePairs) {
+    Collections.sort(filePairs);
+    for (FilePair pair : filePairs) {
+      assert(this.groups.size() > 0);
+      FilePairGroup group = this.groups.poll();
+      group.add(pair);
+      this.groups.add(group);
+    }
+    return true;
+  }
+
   public boolean writeGroupsToFiles(Path baseDirPath, Configuration conf) {
     for (FilePairGroup group : this.groups.toArray(new FilePairGroup[this.groups.size()])) {
       String filename = String.format("filegroup-%03d", group.groupID);

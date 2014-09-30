@@ -8,6 +8,9 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.SequenceFile;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Comparator;
@@ -51,9 +54,57 @@ public class FilePairGroup implements Comparable<FilePairGroup> {
     return this.fileCount * 1000 + this.dirCount * 1000 + this.totalFileSize;
   }
 
+  public List<FilePair> getFilePairs() {
+    return this.filePairs;
+  }
+
+  /**
+   * Load file-pairs from a local file, and populate the "filePairs" array.
+   * Each line of the file is of the format:
+   *  [src file full path] [dest file full path] [file-size in bytes]
+   *
+   * @param fileName:  This must be a local disk file.
+   * @return  Number of file pairs loaded from the file. -1 if failed to access file.
+   */
+  public long initFromFile(String fileName) {
+    File file = new File(fileName);
+    BufferedReader br = null;
+    long count = 0;
+    try {
+      br = new BufferedReader(new FileReader(file));
+      String line;
+      while ((line = br.readLine()) != null) {
+        count++;
+        // process the line.
+        String[] ss = line.split(" ");
+        if (ss.length != 3) {
+          log.info("invalid line: " + line);
+          continue;
+        }
+        boolean isFile = true;
+        long fileSize = Long.parseLong(ss[2]);
+        this.filePairs.add(new FilePair(ss[0], ss[1], isFile, fileSize));
+        this.fileCount++;
+        this.totalFileSize += fileSize;
+      }
+      return count;
+
+    } catch (IOException e) {
+      log.info("failed to open manifest file: " + fileName + " :: " + e.toString());
+      return - 1;
+    } finally {
+      if (br != null) {
+        try {
+          br.close();
+        } catch (IOException e) {
+        }
+      }
+    }
+  }
+
   /**
    * Write the list of file pairs to a partition file.
-   * @param filename
+   * @param filePath
    * @return
    */
   public boolean writeToFile(Path filePath, Configuration conf) {
