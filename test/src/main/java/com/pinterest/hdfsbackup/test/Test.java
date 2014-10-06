@@ -15,6 +15,8 @@ import org.apache.hadoop.util.Progressable;
 
 import java.net.URI;
 import java.util.Arrays;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Created by shawn on 8/23/14.
@@ -32,7 +34,19 @@ public class Test {
 
     System.out.println(System.getProperty("java.class.path"));
 
-    ///////////////////
+    Pattern p = Pattern.compile("\\.(\\d+)$");
+    String path = "hdfs://hdfsbackup-namenode001:8020/hbasebackups/zensmartfeedmaterialized-a" +
+                      "-namenode001/wals/zensmartfeedmaterialized-a-regionserver-24c90477.ec2.pin220.com%2C60020%2C1411803631037.1412021673465";
+    Matcher m = p.matcher(path);
+    String strmatch;
+    if (m.find()) {
+        strmatch = m.group(1);
+        if (strmatch != null) {
+          System.out.println("pattern match " + strmatch);
+        }
+    }
+
+      ///////////////////
     // a file uri must be:  "file:///xxxx/xxx".
     Path localPath = new Path("file:///tmp/dir1/");
     URI baseUri = localPath.toUri();

@@ -14,8 +14,13 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.net.URI;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayDeque;
+import java.util.Date;
 import java.util.Queue;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 
 /**
@@ -200,7 +205,6 @@ public class DirWalker {
     }
     FileListingInDir fileListing = new FileListingInDir(baseDirname);
     Path dirPath = new Path(baseDirname);
-
     Path curPath = dirPath;
     try {
       log.info("will walk HDFS dir: " + baseDirname + "\n");
@@ -244,6 +248,90 @@ public class DirWalker {
       return null;
     }
     return fileListing;
+  }
+
+  public long deleteFiles(String baseDirname, String pattern) {
+    if (baseDirname.endsWith("/")) {
+      baseDirname = baseDirname.substring(0, baseDirname.length() - 1);
+    }
+    FileListingInDir fileListing = new FileListingInDir(baseDirname);
+    Path dirPath = new Path(baseDirname);
+    long maxFiles = 1000 * 10;
+    Path curPath = dirPath;
+    long matched = 0;
+    long unmatched = 0;
+
+    String timeStr = "2014-10-03-01-02-03-000";
+    SimpleDateFormat sdf  = new SimpleDateFormat("yyyy-MM-dd-kk-mm-ss-SSS");
+    long epochTimeBound = 0;
+    try {
+      Date date = sdf.parse(timeStr);
+      epochTimeBound = date.getTime();
+    } catch (ParseException e) {
+      e.printStackTrace();
+    }
+    log.info(String.format("time str = %s,  epoch time bound = %d", timeStr, epochTimeBound));
+    try {
+      log.info("will walk HDFS dir: " + baseDirname + "\n");
+      FileSystem fs = dirPath.getFileSystem(this.conf);
+      // Special case: the base dirname is a file itself.
+      FileStatus sta = fs.getFileStatus(dirPath);
+      if (!sta.isDir()) {
+        log.info(baseDirname + " is a file...");
+        return 0;
+      }
+      Pattern p= Pattern.compile(pattern);
+      Queue pathsToVisit = new ArrayDeque();
+      pathsToVisit.add(dirPath);
+      while (pathsToVisit.size() > 0) {
+        curPath = (Path) pathsToVisit.remove();
+        FileStatus[] statuses = fs.listStatus(curPath);
+        if (statuses.length == 0) {
+          // NOTE: HDFS doesn't add trailing "/" to an empty dir name.
+          fileListing.addEntry(new DirEntry(baseDirname,
+                                               getSuffix(curPath.toString() + "/", baseDirname),
+                                               false, 0));
+        }
+        for (FileStatus status : statuses) {
+          if (status.isDir()) {
+            pathsToVisit.add(status.getPath());
+          } else {
+            String path = status.getPath().toString();
+            Matcher m = p.matcher(path);
+            if (m.find()) {
+              String strmatch = m.group(1);
+              matched++;
+              long epochTime = Long.parseLong(strmatch);
+              if (epochTime < epochTimeBound) {
+                fileListing.addEntry(new DirEntry(baseDirname,
+                                                     getSuffix(status.getPath().toString(), baseDirname),
+                                                     true, status.getLen()));
+                log.info(String.format("path %s: add file: matched part: %s, epoch=%d",
+                                           path, strmatch, epochTime));
+                FileUtils.deleteHDFSDir(path, conf);
+              }
+              if (fileListing.getFileEntryCount() >= maxFiles) {
+                log.info(String.format("dir %s: %d entries whose time < lower bound, " +
+                                           "> max allowed files %d",
+                                          baseDirname, fileListing.getFileEntryCount(), maxFiles));
+                break;
+              }
+            } else {
+              unmatched++;
+            }
+          }
+        }
+        if (fileListing.getFileEntryCount() >= maxFiles) {
+          break;
+        }
+      }
+    } catch (IOException e) {
+      log.info("fail to list path: " + curPath);
+      return fileListing.getFileEntryCount();
+    }
+    log.info(String.format("In dir: %s, pattern = \"%s\", %d matches, %d unmatched",
+                              baseDirname, pattern, matched, unmatched));
+    return fileListing.getFileEntryCount();
   }
 
 }

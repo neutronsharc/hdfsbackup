@@ -33,8 +33,8 @@ public class CompareDir extends Configured implements Tool {
 
     FilePairGroup filePairGroup = null;
     FileListingInDir srcFileList = null;
-    FSType srcType;
-    FSType destType;
+    FSType srcType = FSType.UNKNOWN;
+    FSType destType = FSType.UNKNOWN;
 
     // We only support S3 and HDFS file system for now.
     if (options.manifestFilename != null) {
@@ -51,14 +51,16 @@ public class CompareDir extends Configured implements Tool {
       destType = FileUtils.getFSType(filePairGroup.getFilePairs().get(0).destFile.toString());
     } else {
       srcType = FileUtils.getFSType(options.srcPath);
-      destType = FileUtils.getFSType(options.destPath);
+      if (options.destPath != null) {
+        destType = FileUtils.getFSType(options.destPath);
+      }
     }
 
     if (srcType != FSType.S3 && srcType != FSType.HDFS) {
       log.info("only HDFS and S3 are supported right now.");
       System.exit(1);
     }
-    if (destType != FSType.HDFS && destType != FSType.S3) {
+    if (options.destPath != null && destType != FSType.HDFS && destType != FSType.S3) {
       log.info("only HDFS and S3 are supported right now.");
       System.exit(1);
     }
@@ -66,6 +68,7 @@ public class CompareDir extends Configured implements Tool {
     // Walk the src and dest dir.
     if (options.manifestFilename == null) {
       DirWalker dirWalker = new DirWalker(conf);
+      //dirWalker.deleteFiles(options.srcPath, "\\.(\\d+)$");
       srcFileList = dirWalker.walkDir(options.srcPath);
       srcFileList.display(options.verbose);
       if (options.destPath == null) {
