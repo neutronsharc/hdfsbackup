@@ -101,7 +101,6 @@ public class S3CopyOptions {
     }
     if (!manifestFilenameOption.defined()) {
       srcOption.require();
-      //destOption.require();
     } else {
       if (srcOption.defined() || destOption.defined()) {
         log.info("Error: Cannot specify --manifest and --src/dest at the same time.");

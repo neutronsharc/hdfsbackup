@@ -250,29 +250,38 @@ public class DirWalker {
     return fileListing;
   }
 
-  public long deleteFiles(String baseDirname, String pattern) {
+  /**
+   * Walk through the base HDFS dir, delete files older than the given datetime stamp.
+   *
+   * @param baseDirname
+   * @param lowerboundDatetimeStr
+   * @return
+   */
+  public long deleteFiles(String baseDirname, String lowerboundDatetimeStr, boolean dryrun) {
     if (baseDirname.endsWith("/")) {
       baseDirname = baseDirname.substring(0, baseDirname.length() - 1);
     }
-    FileListingInDir fileListing = new FileListingInDir(baseDirname);
+    String patternStr =  "\\.(\\d+)$";
     Path dirPath = new Path(baseDirname);
-    long maxFiles = 1000 * 10;
     Path curPath = dirPath;
-    long matched = 0;
-    long unmatched = 0;
+    long matchedFiles = 0;
+    long unmatchedFiles = 0;
+    long deletedFiles = 0;
+    long deleteSize = 0;
 
-    String timeStr = "2014-10-03-01-02-03-000";
     SimpleDateFormat sdf  = new SimpleDateFormat("yyyy-MM-dd-kk-mm-ss-SSS");
     long epochTimeBound = 0;
     try {
-      Date date = sdf.parse(timeStr);
+      Date date = sdf.parse(lowerboundDatetimeStr);
       epochTimeBound = date.getTime();
     } catch (ParseException e) {
       e.printStackTrace();
     }
-    log.info(String.format("time str = %s,  epoch time bound = %d", timeStr, epochTimeBound));
+    log.info(String.format("time str = %s,  epoch time lower bound = %d",
+                              lowerboundDatetimeStr,
+                              epochTimeBound));
     try {
-      log.info("will walk HDFS dir: " + baseDirname + "\n");
+      log.info("will delete files in HDFS dir: " + baseDirname + "\n");
       FileSystem fs = dirPath.getFileSystem(this.conf);
       // Special case: the base dirname is a file itself.
       FileStatus sta = fs.getFileStatus(dirPath);
@@ -280,7 +289,7 @@ public class DirWalker {
         log.info(baseDirname + " is a file...");
         return 0;
       }
-      Pattern p= Pattern.compile(pattern);
+      Pattern p = Pattern.compile(patternStr);
       Queue pathsToVisit = new ArrayDeque();
       pathsToVisit.add(dirPath);
       while (pathsToVisit.size() > 0) {
@@ -288,9 +297,6 @@ public class DirWalker {
         FileStatus[] statuses = fs.listStatus(curPath);
         if (statuses.length == 0) {
           // NOTE: HDFS doesn't add trailing "/" to an empty dir name.
-          fileListing.addEntry(new DirEntry(baseDirname,
-                                               getSuffix(curPath.toString() + "/", baseDirname),
-                                               false, 0));
         }
         for (FileStatus status : statuses) {
           if (status.isDir()) {
@@ -300,38 +306,34 @@ public class DirWalker {
             Matcher m = p.matcher(path);
             if (m.find()) {
               String strmatch = m.group(1);
-              matched++;
+              matchedFiles++;
               long epochTime = Long.parseLong(strmatch);
               if (epochTime < epochTimeBound) {
-                fileListing.addEntry(new DirEntry(baseDirname,
-                                                     getSuffix(status.getPath().toString(), baseDirname),
-                                                     true, status.getLen()));
-                log.info(String.format("path %s: add file: matched part: %s, epoch=%d",
-                                           path, strmatch, epochTime));
-                FileUtils.deleteHDFSDir(path, conf);
-              }
-              if (fileListing.getFileEntryCount() >= maxFiles) {
-                log.info(String.format("dir %s: %d entries whose time < lower bound, " +
-                                           "> max allowed files %d",
-                                          baseDirname, fileListing.getFileEntryCount(), maxFiles));
-                break;
+                log.info(String.format("path %s: file size = %d, matched part: %s, epoch=%d " +
+                                           "< lower bound time %s",
+                                           path, status.getLen(),
+                                           strmatch, epochTime, lowerboundDatetimeStr));
+                deleteSize += status.getLen();
+                deletedFiles++;
+                if (!dryrun) {
+                  FileUtils.deleteHDFSDir(path, conf);
+                }
               }
             } else {
-              unmatched++;
+              unmatchedFiles++;
             }
           }
-        }
-        if (fileListing.getFileEntryCount() >= maxFiles) {
-          break;
         }
       }
     } catch (IOException e) {
       log.info("fail to list path: " + curPath);
-      return fileListing.getFileEntryCount();
+      return deletedFiles;
     }
-    log.info(String.format("In dir: %s, pattern = \"%s\", %d matches, %d unmatched",
-                              baseDirname, pattern, matched, unmatched));
-    return fileListing.getFileEntryCount();
+    log.info(String.format("In dir: %s, pattern = \"%s\", %d matches, %d unmatched, " +
+                               "%d files deleted, delete size = %d",
+                              baseDirname, patternStr, matchedFiles, unmatchedFiles,
+                              deletedFiles, deleteSize));
+    return deletedFiles;
   }
 
 }

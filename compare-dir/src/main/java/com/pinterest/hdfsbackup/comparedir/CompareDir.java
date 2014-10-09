@@ -68,7 +68,6 @@ public class CompareDir extends Configured implements Tool {
     // Walk the src and dest dir.
     if (options.manifestFilename == null) {
       DirWalker dirWalker = new DirWalker(conf);
-      //dirWalker.deleteFiles(options.srcPath, "\\.(\\d+)$");
       srcFileList = dirWalker.walkDir(options.srcPath);
       srcFileList.display(options.verbose);
       if (options.destPath == null) {
