@@ -207,7 +207,11 @@ public class S3Uploader {
         log.info("multipart-upload: fail to get digest instance");
         return false;
       }
-      long bytesCopied = FileUtils.copyStream(inputStream, s3OutStream, md);
+      //long bytesCopied = FileUtils.copyStream(inputStream, s3OutStream, md);
+      long bytesCopied = FileUtils.copyStreamWithProgress(inputStream,
+                                                             s3OutStream,
+                                                             md,
+                                                             this.progress);
       if (bytesCopied != metadata.getContentLength()) {
         log.info(String.format("multipart-upload: %s/%s:  copied %d bytes != actual bytes %d",
                                   destBucket, destKey, bytesCopied, metadata.getContentLength()));

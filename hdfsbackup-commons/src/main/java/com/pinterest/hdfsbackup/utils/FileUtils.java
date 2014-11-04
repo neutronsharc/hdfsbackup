@@ -282,10 +282,10 @@ public class FileUtils {
    * @param md
    * @return  number of bytes actually copied.  -1 if error occurs during copy.
    */
-  public static long copyStreamProgress(InputStream ins,
-                                OutputStream outs,
-                                MessageDigest md,
-                                Progressable progress) {
+  public static long copyStreamWithProgress(InputStream ins,
+                                            OutputStream outs,
+                                            MessageDigest md,
+                                            Progressable progress) {
     long copiedBytes = 0;
     byte[] buffer = new byte[1024 * 1024];
     int len = 0;
@@ -301,7 +301,7 @@ public class FileUtils {
         }
         copiedBytes += len;
       }
-      log.info("copied  " + copiedBytes +
+      log.debug("copied  " + copiedBytes +
                    " from input to output, end offset = " + FileUtils.iopos);
     } catch (IOException e) {
       e.printStackTrace();

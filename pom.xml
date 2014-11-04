@@ -10,7 +10,7 @@
     <version>0.1</version>
 
     <modules>
-        <module>commons</module>
+        <module>hdfsbackup-commons</module>
         <module>s3tools</module>
         <module>test</module>
         <module>s3copy</module>
