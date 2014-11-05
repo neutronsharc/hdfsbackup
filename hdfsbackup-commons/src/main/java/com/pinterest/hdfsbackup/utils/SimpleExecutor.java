@@ -14,16 +14,31 @@ public class SimpleExecutor implements Executor
   protected Exception lastException;
   protected Runnable[] queue;
   protected Thread[] workers;
+  protected int outstandingWorkers;
+  protected NetworkBandwidthMonitor bwMonitor;
 
-  public SimpleExecutor(int queueSize, int workerSize)
-  {
+  public SimpleExecutor(int queueSize, int workerSize) {
+    this(queueSize, workerSize, null);
+  }
+
+  public SimpleExecutor(int queueSize, int workerSize, NetworkBandwidthMonitor bwMonitor) {
     this.queue = new Runnable[queueSize + 1];
     this.workers = new Thread[workerSize];
     this.head = 0;
     this.tail = 0;
     this.closed = false;
     this.lastException = null;
+    this.outstandingWorkers = this.workers.length;
+    this.bwMonitor = bwMonitor;
     startWorkers();
+  }
+
+  public int getOutstandingWorkers() {
+    return this.outstandingWorkers;
+  }
+
+  public void updateOutstandingWorkers(int inc) {
+    this.outstandingWorkers += inc;
   }
 
   public synchronized void registerException(Exception e) {
@@ -54,6 +69,10 @@ public class SimpleExecutor implements Executor
       try {
         this.workers[i].join();
         log.info(String.format("worker thread exit %d/%d", i + 1, this.workers.length));
+        updateOutstandingWorkers(-1);
+        if (this.bwMonitor != null) {
+          this.bwMonitor.setNumberOfWorkers(getOutstandingWorkers());
+        }
       }
       catch (InterruptedException e) {
         log.error("Interrupted while waiting for workers", e);

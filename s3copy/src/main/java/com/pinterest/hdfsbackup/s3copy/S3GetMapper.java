@@ -2,6 +2,7 @@ package com.pinterest.hdfsbackup.s3copy;
 
 import com.pinterest.hdfsbackup.s3tools.S3CopyOptions;
 import com.pinterest.hdfsbackup.utils.FilePair;
+import com.pinterest.hdfsbackup.utils.NetworkBandwidthMonitor;
 import com.pinterest.hdfsbackup.utils.SimpleExecutor;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -16,6 +17,10 @@ import org.apache.hadoop.mapred.Reporter;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by shawn on 8/26/14.
@@ -31,12 +36,24 @@ public class S3GetMapper implements Mapper<LongWritable, FilePair, Text, FilePai
   protected Set<FilePair> unfinishedFiles;
   public long bytesToCopy = 0;
 
+  // Network bandwidth monitor
+  public NetworkBandwidthMonitor bwMonitor;
+  public ScheduledExecutorService bwMonitorScheduler;
+  public ScheduledFuture<?> bwMonitorHandle;
+
   @Override
   public void close() throws IOException {
     log.info(String.format("have posted %d files %d bytes, wait for completion...",
                               this.fileCount, this.bytesToCopy));
     this.executor.close();
     log.info("has processed " + this.fileCount + " file pairs");
+
+    // Stop the bandwidth monitor.
+    log.info("stop bandwidth monitor...");
+    this.bwMonitorHandle.cancel(true);
+    this.bwMonitorScheduler.shutdown();
+
+    // Check if there are unfinished files (failures).
     synchronized (this) {
       if (this.unfinishedFiles.size() > 0) {
         log.info(String.format("Error: %d files failed to copy ::",
@@ -64,9 +81,20 @@ public class S3GetMapper implements Mapper<LongWritable, FilePair, Text, FilePai
     this.options = new S3CopyOptions();
     this.options.populateFromConfiguration(conf);
     this.options.showCopyOptions();
-    this.executor = new SimpleExecutor(this.options.queueSize,
-                                          this.options.workerThreads);
     unfinishedFiles = new HashSet<FilePair>();
+
+    this.bwMonitor = new NetworkBandwidthMonitor(this.options.networkBandwidthMonitorInterval,
+                                                 this.options.workerThreads,
+                                                 this.options.networkBandwidthLimit);
+    this.bwMonitorScheduler = Executors.newScheduledThreadPool(1);
+    this.bwMonitorHandle =
+        this.bwMonitorScheduler.scheduleAtFixedRate(this.bwMonitor,
+                                                    this.options.networkBandwithMonitorInitDelay,
+                                                    this.options.networkBandwidthMonitorInterval,
+                                                    TimeUnit.MILLISECONDS);
+    this.executor = new SimpleExecutor(this.options.queueSize,
+                                       this.options.workerThreads,
+                                       this.bwMonitor);
   }
 
   @Override

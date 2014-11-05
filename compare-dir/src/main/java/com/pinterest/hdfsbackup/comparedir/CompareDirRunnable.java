@@ -64,7 +64,10 @@ public class CompareDirRunnable implements Runnable {
         MessageDigest md = null;
         try {
           md = MessageDigest.getInstance("MD5");
-          if (FileUtils.computeHDFSDigest(this.filename, this.compareDirMapper.getConf(), md)) {
+          if (FileUtils.computeHDFSDigest(this.filename,
+                                          this.compareDirMapper.getConf(),
+                                          md,
+                                          this.compareDirMapper.bwMonitor)) {
             checksum = new String(Base64.encodeBase64(md.digest()), Charset.forName("UTF-8"));
             success = true;
             break;
