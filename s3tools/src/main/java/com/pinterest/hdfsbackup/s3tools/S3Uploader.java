@@ -4,6 +4,7 @@ import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.pinterest.hdfsbackup.utils.DirEntry;
 import com.pinterest.hdfsbackup.utils.FileUtils;
+import com.pinterest.hdfsbackup.utils.NetworkBandwidthMonitor;
 import com.pinterest.hdfsbackup.utils.S3Utils;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.logging.Log;
@@ -34,16 +35,26 @@ public class S3Uploader {
   ThreadPoolExecutor threadPool;
   S3CopyOptions options;
   Progressable progress;
+  NetworkBandwidthMonitor bwMonitor;
   // md5 checksum of the last downloaded file.
   String lastMD5Checksum = "";
 
+  public S3Uploader(Configuration conf,
+                    S3CopyOptions options,
+                    Progressable progress) {
+    this(conf, options, progress, null);
+  }
 
-  public S3Uploader(Configuration conf, S3CopyOptions options, Progressable progress) {
+  public S3Uploader(Configuration conf,
+                    S3CopyOptions options,
+                    Progressable progress,
+                    NetworkBandwidthMonitor bwMonitor) {
     this.conf = conf;
     this.s3client = S3Utils.createAmazonS3Client(conf);
     //this.threadPool = Utils.createDefaultExecutorService();
     this.options = options;
     this.progress = progress;
+    this.bwMonitor = bwMonitor;
   }
 
   public void close() {
@@ -126,7 +137,7 @@ public class S3Uploader {
           e.printStackTrace();
           return false;
         }
-        if (FileUtils.computeHDFSDigest(srcFilename, this.conf, md)) {
+        if (FileUtils.computeHDFSDigest(srcFilename, this.conf, md, this.bwMonitor)) {
           srcDigest = new String(Base64.encodeBase64(md.digest()), Charset.forName("UTF-8"));
           srcDigestSuccess = true;
           break;
@@ -207,7 +218,11 @@ public class S3Uploader {
         log.info("multipart-upload: fail to get digest instance");
         return false;
       }
-      long bytesCopied = FileUtils.copyStream(inputStream, s3OutStream, md);
+      long bytesCopied = FileUtils.copyStream(inputStream,
+                                                 s3OutStream,
+                                                 md,
+                                                 this.progress,
+                                                 this.bwMonitor);
       if (bytesCopied != metadata.getContentLength()) {
         log.info(String.format("multipart-upload: %s/%s:  copied %d bytes != actual bytes %d",
                                   destBucket, destKey, bytesCopied, metadata.getContentLength()));

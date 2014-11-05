@@ -37,6 +37,13 @@ public class S3CopyOptions {
   // "compareChecksum" is used only by compare-dir tool.
   public boolean compareChecksum = false;
 
+  // Bandwidth limit in MB/s
+  public double networkBandwidthLimit = 15;
+  // Interval to monitor network bandwidth
+  public long networkBandwidthMonitorInterval = 10000L;
+  // Initial delay of the monitor, in milli-sec.
+  public long networkBandwithMonitorInitDelay = 5000L;
+
   public S3CopyOptions() { }
 
   /**
@@ -64,6 +71,10 @@ public class S3CopyOptions {
     this.useInterimFiles = conf.getBoolean("s3copy.useInterimFiles", false);
     // When comparing dir, also compare file checksums.
     this.compareChecksum = conf.getBoolean("s3copy.compareChecksum", false);
+
+    this.networkBandwidthLimit = conf.getFloat("s3copy.bwLimit", 15);
+    this.networkBandwidthMonitorInterval = conf.getLong("s3copy.bwMonitorInterval", 10000L);
+    this.networkBandwithMonitorInitDelay = conf.getLong("s3copy.bwMonitorInitDelay", 5000L);
   }
 
   public void showCopyOptions() {
@@ -78,8 +89,10 @@ public class S3CopyOptions {
       .append(String.format("\tworker threads per task: %d\n", this.workerThreads))
       .append(String.format("\tmax inflight parts:      %d\n", this.maxInflightParts))
       .append(String.format("\tuse interim files:       %s\n", this.useInterimFiles))
-      .append(String.format("\tcompare checksum:        %s\n", this.compareChecksum));
-
+      .append(String.format("\tcompare checksum:        %s\n", this.compareChecksum))
+      .append(String.format("\tnetwork bw limit(MB/s):  %s\n", this.networkBandwidthLimit))
+      .append(String.format("\tnetwork bw monitor interval (ms): %s\n",
+                               this.networkBandwidthMonitorInterval));
     log.info(sb.toString());
   }
 

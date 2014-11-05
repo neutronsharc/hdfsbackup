@@ -17,7 +17,7 @@
 
         <dependency>
             <groupId>com.pinterest.hdfsbackup</groupId>
-            <artifactId>commons</artifactId>
+            <artifactId>hdfsbackup-commons</artifactId>
             <version>0.1</version>
         </dependency>
 

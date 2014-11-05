@@ -2,6 +2,7 @@ package com.pinterest.hdfsbackup.comparedir;
 
 import com.pinterest.hdfsbackup.s3tools.S3CopyOptions;
 import com.pinterest.hdfsbackup.utils.FilePair;
+import com.pinterest.hdfsbackup.utils.NetworkBandwidthMonitor;
 import com.pinterest.hdfsbackup.utils.SimpleExecutor;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -17,6 +18,10 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TreeMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by shawn on 9/3/14.
@@ -33,6 +38,11 @@ public class CompareDirMapper implements Mapper<LongWritable, FilePair, Text, Te
   // Map source file full path to file pair checksum.
   protected Map<String, FilePairChecksum> unfinishedFilePairs;
   public long bytesToCompare = 0;
+
+  // Network bandwidth monitor
+  public NetworkBandwidthMonitor bwMonitor;
+  public ScheduledExecutorService bwMonitorScheduler;
+  public ScheduledFuture<?> bwMonitorHandle;
 
   @Override
   public void map(LongWritable key,
@@ -70,6 +80,12 @@ public class CompareDirMapper implements Mapper<LongWritable, FilePair, Text, Te
                               this.filePairCount, this.bytesToCompare));
     this.executor.close();
     log.info("has processed " + this.filePairCount + " file pairs");
+
+    // Stop the bandwidth monitor.
+    log.info("stop bandwidth monitor...");
+    this.bwMonitorHandle.cancel(true);
+    this.bwMonitorScheduler.shutdown();
+
     synchronized (this) {
       if (this.unfinishedFilePairs.size() > 0) {
         log.info(String.format("Error: %d file pairs checksum mismatch ::",
@@ -98,9 +114,23 @@ public class CompareDirMapper implements Mapper<LongWritable, FilePair, Text, Te
     this.options = new S3CopyOptions();
     this.options.populateFromConfiguration(conf);
     this.options.showCopyOptions();
-    this.executor = new SimpleExecutor(this.options.queueSize,
-                                          this.options.workerThreads);
     this.unfinishedFilePairs = new TreeMap<String, FilePairChecksum>();
+
+    this.bwMonitorScheduler = Executors.newScheduledThreadPool(1);
+    this.bwMonitor = new NetworkBandwidthMonitor(this.options.networkBandwidthMonitorInterval,
+                                                 this.options.workerThreads,
+                                                 this.options.networkBandwidthLimit);
+    this.bwMonitorHandle =
+        this.bwMonitorScheduler.scheduleAtFixedRate(this.bwMonitor,
+                                                    this.options.networkBandwithMonitorInitDelay,
+                                                    this.options.networkBandwidthMonitorInterval,
+                                                    TimeUnit.MILLISECONDS);
+    this.executor = new SimpleExecutor(this.options.queueSize,
+                                       this.options.workerThreads,
+                                       this.bwMonitor);
+    this.executor = new SimpleExecutor(this.options.queueSize,
+                                       this.options.workerThreads,
+                                       this.bwMonitor);
   }
 
   public synchronized boolean addUnfinishedFile(FilePair pair) {

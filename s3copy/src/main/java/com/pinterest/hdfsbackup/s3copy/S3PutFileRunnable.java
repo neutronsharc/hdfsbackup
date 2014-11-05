@@ -29,7 +29,8 @@ public class S3PutFileRunnable implements Runnable {
     log.info("Runnable start processing file pair: " + this.filePair.toString());
     S3Uploader s3Uploader = new S3Uploader(this.s3PutMapper.getConf(),
                                            this.options,
-                                           this.s3PutMapper.reporter);
+                                           this.s3PutMapper.reporter,
+                                           this.s3PutMapper.bwMonitor);
     String destFilename = this.filePair.destFile.toString();
     String srcFilename = this.filePair.srcFile.toString();
     boolean ret = false;

@@ -255,25 +255,17 @@ public class FileUtils {
    * @return  number of bytes actually copied.  -1 if error occurs during copy.
    */
   public static long copyStream(InputStream ins, OutputStream outs, MessageDigest md) {
-    long copiedBytes = 0;
-    byte[] buffer = new byte[1024 * 1024];
-    int len = 0;
-    try {
-      while ((len = ins.read(buffer)) > 0) {
-        if (outs != null) {
-          outs.write(buffer, 0, len);
-        }
-        if (md != null) {
-          md.update(buffer, 0, len);
-        }
-        copiedBytes += len;
-      }
-    } catch (IOException e) {
-      e.printStackTrace();
-      return -1;
-    }
-    return copiedBytes;
+    return copyStream(ins, outs, md, null, null);
   }
+
+
+  public static long copyStream(InputStream ins,
+                                OutputStream outs,
+                                MessageDigest md,
+                                Progressable progress) {
+    return copyStream(ins, outs, md, progress, null);
+  }
+
 
   /**
    * Copy from input stream to output stream.  Update the digest if provided.
@@ -282,10 +274,11 @@ public class FileUtils {
    * @param md
    * @return  number of bytes actually copied.  -1 if error occurs during copy.
    */
-  public static long copyStreamProgress(InputStream ins,
+  public static long copyStream(InputStream ins,
                                 OutputStream outs,
                                 MessageDigest md,
-                                Progressable progress) {
+                                Progressable progress,
+                                NetworkBandwidthMonitor bwMonitor) {
     long copiedBytes = 0;
     byte[] buffer = new byte[1024 * 1024];
     int len = 0;
@@ -294,15 +287,28 @@ public class FileUtils {
         if (outs != null) {
           outs.write(buffer, 0, len);
         }
-        FileUtils.iopos += len;
-        progress.progress();
-        if (md != null) {
-          md.update(buffer, 0, len);
-        }
+        if (progress != null) progress.progress();
+        if (md != null) md.update(buffer, 0, len);
         copiedBytes += len;
+
+        if (bwMonitor == null) continue;
+        bwMonitor.incBytesCopiedInLastInterval(len);
+        long sleepTime = bwMonitor.getSleepTimeInLastInterval();
+        long perWorkerSleepTime = bwMonitor.getPerWorkerSleepTimeInLastInterval();
+        long threadSleepTime = bwMonitor.getSavedSleepTimeInLastInterval();
+        if (sleepTime > 0) {
+          //bwMonitor.updateSleepTimeInLastInterval(-sleepTime);
+          bwMonitor.updateSleepTimeInLastInterval(-perWorkerSleepTime);
+          try {
+            log.info(String.format("bw-limit at copyStream: will sleep %d ms", threadSleepTime));
+            Thread.sleep(threadSleepTime);
+          } catch(InterruptedException e) {
+            log.warn("copystream: bandwidth rate limit sleep is interrupted: " + sleepTime);
+          }
+        }
       }
-      log.info("copied  " + copiedBytes +
-                   " from input to output, end offset = " + FileUtils.iopos);
+      log.debug("copied  " + copiedBytes +
+                    " from input to output, end offset = " + FileUtils.iopos);
     } catch (IOException e) {
       e.printStackTrace();
       return -1;
@@ -406,6 +412,13 @@ public class FileUtils {
   public static boolean computeHDFSDigest(String hdfsFilename,
                                           Configuration conf,
                                           MessageDigest md) {
+    return computeHDFSDigest(hdfsFilename, conf, md, null);
+  }
+
+  public static boolean computeHDFSDigest(String hdfsFilename,
+                                          Configuration conf,
+                                          MessageDigest md,
+                                          NetworkBandwidthMonitor bwMonitor) {
     byte[] buffer = new byte[1024 * 1024];
     int retry = 0;
     int maxRetry = 5;
@@ -434,6 +447,22 @@ public class FileUtils {
         while ((len = ins.read(buffer)) > 0) {
           md.update(buffer, 0, len);
           bytesRead += len;
+
+          if (bwMonitor == null) continue;
+          bwMonitor.incBytesCopiedInLastInterval(len);
+          long sleepTime = bwMonitor.getSleepTimeInLastInterval();
+          long perWorkerSleepTime = bwMonitor.getPerWorkerSleepTimeInLastInterval();
+          long threadSleepTime = bwMonitor.getSavedSleepTimeInLastInterval();
+          if (sleepTime > 0) {
+            //bwMonitor.updateSleepTimeInLastInterval(-sleepTime);
+            bwMonitor.updateSleepTimeInLastInterval(-perWorkerSleepTime);
+            try {
+              log.info(String.format("bw-limit at HDFSDigest: will sleep %d ms", threadSleepTime));
+              Thread.sleep(threadSleepTime);
+            } catch(InterruptedException e) {
+              log.warn("HDFS-digest: bandwidth rate limit sleep is interrupted: " + sleepTime);
+            }
+          }
         }
         if (bytesRead != fileSize) {
           log.info(String.format("Error: file %s: read bytes %d != file size %d",
