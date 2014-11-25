@@ -149,6 +149,10 @@ public class S3Copy extends Configured implements Tool {
 
       // Each mapper takes care of a file group. We don't need reducers.
       job.setNumReduceTasks(0);
+      // Disable speculative execution. Otherwise two instances of a mapper may write to the same
+      // target file, leading to data corruption.
+      log.info("disable speculative execution.");
+      job.setMapSpeculativeExecution(false);
       int numberMappers = job.getNumMapTasks();
       FilePairPartition partition = new FilePairPartition(numberMappers);
       if (srcFileList != null) {
