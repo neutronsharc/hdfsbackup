@@ -376,7 +376,13 @@ public class DistCp implements Tool {
       FSDataOutputStream out = null;
       try {
         // open src file
-        in = srcstat.getPath().getFileSystem(job).open(srcstat.getPath());
+        try {
+          in = srcstat.getPath().getFileSystem(job).open(srcstat.getPath());
+        } catch (IOException e) {
+          LOG.error("Failed to open src file " + srcstat.getPath() + ", ignore and return");
+          in = null;
+          return;
+        }
         reporter.incrCounter(Counter.BYTESEXPECTED, srcstat.getLen());
         // open tmp file
         out = create(tmpfile, reporter, srcstat);
@@ -396,10 +402,14 @@ public class DistCp implements Tool {
       }
 
       if (cbcopied != srcstat.getLen()) {
-        throw new IOException("File size not matched: copied "
-            + bytesString(cbcopied) + " to tmpfile (=" + tmpfile
-            + ") but expected " + bytesString(srcstat.getLen())
-            + " from " + srcstat.getPath());
+        if (srcstat.getLen() == 0 && cbcopied > 0) {
+          LOG.info("most likely see a WAL file corruption: " + srcstat.getPath());
+        } else {
+          throw new IOException("File size not matched: copied "
+              + bytesString(cbcopied) + " to tmpfile (=" + tmpfile
+              + ") but expected " + bytesString(srcstat.getLen())
+              + " from " + srcstat.getPath());
+        }
       }
       else {
         if (totfiles == 1) {
