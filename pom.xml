@@ -18,6 +18,7 @@
         <module>compare-dir</module>
         <module>cleanup-multipart-uploads</module>
         <module>cleanup-dir</module>
+        <module>distcp</module>
     </modules>
 
     <dependencies>

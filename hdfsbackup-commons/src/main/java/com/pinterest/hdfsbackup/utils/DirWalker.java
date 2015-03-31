@@ -330,7 +330,7 @@ public class DirWalker {
       return deletedFiles;
     }
     log.info(String.format("In dir: %s, pattern = \"%s\", %d matches, %d unmatched, " +
-                               "%d files deleted, delete size = %d",
+                               "%d files deleted, delete size = %d\n\n",
                               baseDirname, patternStr, matchedFiles, unmatchedFiles,
                               deletedFiles, deleteSize));
     return deletedFiles;
