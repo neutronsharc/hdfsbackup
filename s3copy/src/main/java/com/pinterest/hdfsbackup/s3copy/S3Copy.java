@@ -122,6 +122,7 @@ public class S3Copy extends Configured implements Tool {
     // content against the md5 checksum in s3 obj metadata.  The downloaded objs are
     // not really saved anywhere though.
     // TODO(shawn@): support local file.
+    boolean withinHDFS = false;
     if (srcType == FSType.S3 && destType == FSType.HDFS) {
       log.info("from S3 to HDFS");
       toS3 = false;
@@ -131,6 +132,11 @@ public class S3Copy extends Configured implements Tool {
     } else if (srcType == FSType.HDFS && destType == FSType.S3) {
       log.info("from HDFS to S3");
       toS3 = true;
+    } else if (srcType == FSType.HDFS && destType == FSType.HDFS) {
+      // data copy within HDFS. This is a special case to handle WAL copy. Must provide a
+      // manifest file containing all WAL files to copy.
+      log.info("from HDFS to HDFS");
+      withinHDFS = true;
     } else {
       log.info("unsupported transmission");
       return 1;
@@ -182,7 +188,11 @@ public class S3Copy extends Configured implements Tool {
       job.setOutputKeyClass(Text.class);
       job.setOutputValueClass(FilePair.class);
 
-      if (toS3) {
+      if (withinHDFS) {
+        job.setJobName(String.format("HDFS copy with mainfest = %s",
+                                     options.manifestFilename));
+        job.setMapperClass(HDFSCopyMapper.class);
+      } else if (toS3) {
         job.setMapperClass(S3PutMapper.class);
       } else {
         job.setMapperClass(S3GetMapper.class);

@@ -73,7 +73,7 @@ public class S3CopyOptions {
     this.compareChecksum = conf.getBoolean("s3copy.compareChecksum", false);
 
     this.networkBandwidthLimit = conf.getFloat("s3copy.bwLimit", 15);
-    this.networkBandwidthMonitorInterval = conf.getLong("s3copy.bwMonitorInterval", 10000L);
+    this.networkBandwidthMonitorInterval = conf.getLong("s3copy.bwMonitorInterval", 5000L);
     this.networkBandwithMonitorInitDelay = conf.getLong("s3copy.bwMonitorInitDelay", 5000L);
   }
 
