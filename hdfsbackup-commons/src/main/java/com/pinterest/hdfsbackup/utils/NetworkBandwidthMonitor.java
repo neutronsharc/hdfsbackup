@@ -90,7 +90,8 @@ public class NetworkBandwidthMonitor implements Runnable {
     double bwUsed =  bytesCopied / (1024.0 * 1024) / (timeUsedToCopy / 1000.0);
     long numWorkers = getNumberOfWorkers();
 
-    log.info(String.format("bw-monitor: bytesCopied = %d, " +
+    if (bwUsed > this.bwLimit) {
+      log.debug(String.format("bw-monitor: bytesCopied = %d, " +
                                "remaining worker threads = %d, " +
                                "perWorkerSleep = %d ms, " +
                                "timeUsedToCopy = %d ms, " +
@@ -107,15 +108,15 @@ public class NetworkBandwidthMonitor implements Runnable {
                               bwUsed,
                               this.bwLimit));
 
-    if (bwUsed > this.bwLimit) {
       double fraction = (bwUsed - this.bwLimit) / bwUsed;
       long toSleepTime = (long)(fraction * this.monitorInterval);
-      long perWorkerSleepTime = toSleepTime / (numWorkers > 0 ? numWorkers : 1);
+      //long perWorkerSleepTime = toSleepTime / (numWorkers > 0 ? numWorkers : 1);
+      long perWorkerSleepTime = toSleepTime;
       setSleepTimeInLastInterval(toSleepTime);
       setPerWorkerSleepTimeInLastInterval(perWorkerSleepTime);
       this.savedSleepTimeInLastInterval = toSleepTime;
       log.info(String.format("used-bw %f > bw-limit %f, force %d workers to sleep %d ms",
-                                bwUsed, bwLimit, numWorkers, toSleepTime));
+                             bwUsed, bwLimit, numWorkers, toSleepTime));
     } else {
       setSleepTimeInLastInterval(0L);
       setPerWorkerSleepTimeInLastInterval(0L);

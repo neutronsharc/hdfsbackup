@@ -40,9 +40,9 @@ public class S3CopyOptions {
   // Bandwidth limit in MB/s
   public double networkBandwidthLimit = 15;
   // Interval to monitor network bandwidth
-  public long networkBandwidthMonitorInterval = 10000L;
+  public long networkBandwidthMonitorInterval = 2000L;
   // Initial delay of the monitor, in milli-sec.
-  public long networkBandwithMonitorInitDelay = 5000L;
+  public long networkBandwithMonitorInitDelay = 2000L;
 
   public S3CopyOptions() { }
 
@@ -73,8 +73,8 @@ public class S3CopyOptions {
     this.compareChecksum = conf.getBoolean("s3copy.compareChecksum", false);
 
     this.networkBandwidthLimit = conf.getFloat("s3copy.bwLimit", 15);
-    this.networkBandwidthMonitorInterval = conf.getLong("s3copy.bwMonitorInterval", 5000L);
-    this.networkBandwithMonitorInitDelay = conf.getLong("s3copy.bwMonitorInitDelay", 5000L);
+    this.networkBandwidthMonitorInterval = conf.getLong("s3copy.bwMonitorInterval", 2000L);
+    this.networkBandwithMonitorInitDelay = conf.getLong("s3copy.bwMonitorInitDelay", 2000L);
   }
 
   public void showCopyOptions() {
