@@ -141,13 +141,13 @@ public class CleanupMultipartUploads {
 
   public static void main(String args[]) {
     if (args.length < 1) {
-      log.info(String.format("Usage: [command] <S3 bucket name>"));
+      log.info(String.format("Usage: [command] <S3 bucket name> <days>"));
       return;
     }
     String bucket = args[0];
     Configuration conf = new Configuration();
     CleanupMultipartUploads cleanupper = new CleanupMultipartUploads(conf, bucket);
-    int days = 1;
+    int days = Integer.valueOf(args[1]);
     Date lower_bound = new Date(System.currentTimeMillis() - days * 24L * 60 * 60 * 1000);
     boolean ret = false;
     try {

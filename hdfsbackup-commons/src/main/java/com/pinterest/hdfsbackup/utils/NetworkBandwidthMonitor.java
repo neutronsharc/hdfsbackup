@@ -112,7 +112,7 @@ public class NetworkBandwidthMonitor implements Runnable {
       long toSleepTime = (long)(fraction * this.monitorInterval);
       //long perWorkerSleepTime = toSleepTime / (numWorkers > 0 ? numWorkers : 1);
       long perWorkerSleepTime = toSleepTime;
-      setSleepTimeInLastInterval(toSleepTime);
+      setSleepTimeInLastInterval(toSleepTime * numWorkers);
       setPerWorkerSleepTimeInLastInterval(perWorkerSleepTime);
       this.savedSleepTimeInLastInterval = toSleepTime;
       log.info(String.format("used-bw %f > bw-limit %f, force %d workers to sleep %d ms",
