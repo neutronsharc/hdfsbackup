@@ -31,7 +31,8 @@ public class FileUtils {
     Path path = new Path(filename);
     URI uri = path.toUri();
     String scheme = uri.getScheme();
-    if (scheme == null || scheme.equalsIgnoreCase("hdfs")) {
+    if (scheme == null || scheme.equalsIgnoreCase("hdfs")
+        || scheme.equalsIgnoreCase("webhdfs")) {
       return FSType.HDFS;
     } else if (scheme.equalsIgnoreCase("s3") || scheme.equalsIgnoreCase("s3n")) {
       return FSType.S3;
