@@ -293,16 +293,11 @@ public class FileUtils {
         copiedBytes += len;
 
         if (bwMonitor == null) continue;
-        bwMonitor.incBytesCopiedInLastInterval(len);
-        long sleepTime = bwMonitor.getSleepTimeInLastInterval();
-        long perWorkerSleepTime = bwMonitor.getPerWorkerSleepTimeInLastInterval();
-        long threadSleepTime = bwMonitor.getSavedSleepTimeInLastInterval();
+        long sleepTime = bwMonitor.incBytesCopiedWithThrottling(len);
         if (sleepTime > 0) {
-          //bwMonitor.updateSleepTimeInLastInterval(-sleepTime);
-          bwMonitor.updateSleepTimeInLastInterval(-perWorkerSleepTime);
           try {
-            log.info(String.format("bw-limit at copyStream: will sleep %d ms", threadSleepTime));
-            Thread.sleep(threadSleepTime);
+            log.debug(String.format("bw-limit at copyStream: will sleep %d ms", sleepTime));
+            Thread.sleep(sleepTime);
           } catch(InterruptedException e) {
             log.warn("copystream: bandwidth rate limit sleep is interrupted: " + sleepTime);
           }
@@ -450,16 +445,11 @@ public class FileUtils {
           bytesRead += len;
 
           if (bwMonitor == null) continue;
-          bwMonitor.incBytesCopiedInLastInterval(len);
-          long sleepTime = bwMonitor.getSleepTimeInLastInterval();
-          long perWorkerSleepTime = bwMonitor.getPerWorkerSleepTimeInLastInterval();
-          long threadSleepTime = bwMonitor.getSavedSleepTimeInLastInterval();
+          long sleepTime = bwMonitor.incBytesCopiedWithThrottling(len);
           if (sleepTime > 0) {
-            //bwMonitor.updateSleepTimeInLastInterval(-sleepTime);
-            bwMonitor.updateSleepTimeInLastInterval(-perWorkerSleepTime);
             try {
-              log.info(String.format("bw-limit at HDFSDigest: will sleep %d ms", threadSleepTime));
-              Thread.sleep(threadSleepTime);
+              log.debug(String.format("bw-limit at HDFSDigest: will sleep %d ms", sleepTime));
+              Thread.sleep(sleepTime);
             } catch(InterruptedException e) {
               log.warn("HDFS-digest: bandwidth rate limit sleep is interrupted: " + sleepTime);
             }

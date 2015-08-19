@@ -27,6 +27,11 @@ public class NetworkBandwidthMonitor implements Runnable {
   // How many bytes are copied in last interval.
   private long bytesCopiedInLastInterval;
 
+  // When the program starts: starting time in ms.
+  private long startTimeMs;
+
+  private long bytesCopied;
+
   public NetworkBandwidthMonitor(long monitorInterval, long numWorkers, double bwLimit) {
     this.monitorInterval = monitorInterval;
     this.numberOfWorkers = numWorkers;
@@ -34,6 +39,9 @@ public class NetworkBandwidthMonitor implements Runnable {
     this.sleepTimeInLastInterval = 0L;
     this.perWorkerSleepTimeInLastInterval = 0L;
     this.bytesCopiedInLastInterval = 0L;
+
+    this.startTimeMs = System.currentTimeMillis();
+    this.bytesCopied = 0L;
   }
 
   public synchronized long getBytesCopiedInLastInterval() {
@@ -42,6 +50,20 @@ public class NetworkBandwidthMonitor implements Runnable {
 
   public synchronized void incBytesCopiedInLastInterval(long v) {
     this.bytesCopiedInLastInterval += v;
+  }
+
+  // Update the total bytes copied, computed bandwidth usage.
+  // Returns:  number of ms to sleep if the caller's bw usage has exceeded
+  //           rate limit.
+  //           0 if bw usage is within limit.
+  public synchronized long incBytesCopiedWithThrottling(long v) {
+    this.bytesCopied += v;
+    long actualUsedTimeMs = System.currentTimeMillis() - this.startTimeMs;
+    long expectedUsedTimeMs = (long) (this.bytesCopied / 1000 / this.bwLimit);
+    if (expectedUsedTimeMs > actualUsedTimeMs) {
+      return expectedUsedTimeMs - actualUsedTimeMs;
+    }
+    return 0;
   }
 
   public synchronized void setBytesCopiedInLastInterval(long v) {
