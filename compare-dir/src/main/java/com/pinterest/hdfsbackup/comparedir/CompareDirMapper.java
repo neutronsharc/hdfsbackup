@@ -122,7 +122,7 @@ public class CompareDirMapper implements Mapper<LongWritable, FilePair, Text, Te
                                                  this.options.networkBandwidthLimit);
     this.bwMonitorHandle =
         this.bwMonitorScheduler.scheduleAtFixedRate(this.bwMonitor,
-                                                    this.options.networkBandwithMonitorInitDelay,
+                                                    this.options.networkBandwidthMonitorInitDelay,
                                                     this.options.networkBandwidthMonitorInterval,
                                                     TimeUnit.MILLISECONDS);
     this.executor = new SimpleExecutor(this.options.queueSize,
